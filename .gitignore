@@ -1,0 +1,108 @@
+# Dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+package-lock.json
+*/package-lock.json
+
+# Turbo
+.turbo/
+**/.turbo/
+
+# Testing
+coverage/
+*.log
+.nyc_output/
+
+# Next.js
+.next/
+**/.next/
+out/
+**/out/
+build/
+dist/
+
+# Production
+*.tsbuildinfo
+next-env.d.ts
+
+# Misc
+.DS_Store
+**/.DS_Store
+*.pem
+*.pid
+*.seed
+*.pid.lock
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Environment Variables
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+**/.env
+**/.env.local
+**/.env.development
+**/.env.development.local
+**/.env.test
+**/.env.test.local
+**/.env.production
+**/.env.production.local
+
+# BUT keep example env files
+!.env.example
+!**/.env.example
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+.vs/
+
+# OS Files
+Thumbs.db
+.DS_Store
+**/.DS_Store
+desktop.ini
+*.tmp
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Uploads and temporary files
+uploads/
+temp/
+tmp/
+*.cache
+
+# Lock files (optional - uncomment if you want to ignore them)
+# yarn.lock
+# pnpm-lock.yaml
+
+# System files
+.history/
+*.bak
+*.swp

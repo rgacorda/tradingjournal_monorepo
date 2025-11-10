@@ -1,0 +1,27 @@
+{
+  "name": "trading-journal-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trading Journal - Full Stack Application",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "turbo run start",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "backend:dev": "turbo run dev --filter=backend",
+    "frontend:dev": "turbo run dev --filter=frontend",
+    "backend:start": "turbo run start --filter=backend",
+    "frontend:start": "turbo run start --filter=frontend"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "npm@10.0.0"
+}
