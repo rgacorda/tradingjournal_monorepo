@@ -55,53 +55,53 @@ export default function AddAccountForm({
   open,
   onOpenChange,
 }: ProfileFormProps) {
-  const isDesktop = useIsMobile();
+  const isMobile = useIsMobile();
 
-  if (!isDesktop) {
+  if (isMobile) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogTrigger asChild>
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerTrigger asChild>
           <Button variant="outline" className="mx-2">
             <IconPlus />
           </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add new Account</DialogTitle>
-            <DialogDescription>
-              Add your new trading account here. Click add when you&apos;re done.
-            </DialogDescription>
-          </DialogHeader>
-          <ProfileForm onOpenChange={onOpenChange} />
-        </DialogContent>
-      </Dialog>
+        </DrawerTrigger>
+        <DrawerContent>
+          <div className="mx-auto">
+            <DrawerHeader className="text-left">
+              <DrawerTitle>Add new Account</DrawerTitle>
+              <DrawerDescription>
+                Add your new trading account here. Click add when you&apos;re done.
+              </DrawerDescription>
+            </DrawerHeader>
+            <ProfileForm className="px-4" onOpenChange={onOpenChange}/>
+            <DrawerFooter className="pt-2">
+              <DrawerClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DrawerClose>
+            </DrawerFooter>
+          </div>
+        </DrawerContent>
+      </Drawer>
     );
   }
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerTrigger asChild>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
         <Button variant="outline" className="mx-2">
           <IconPlus />
         </Button>
-      </DrawerTrigger>
-      <DrawerContent>
-        <div className="mx-auto">
-          <DrawerHeader className="text-left">
-            <DrawerTitle>Add new Account</DrawerTitle>
-            <DrawerDescription>
-              Add your new trading account here. Click add when you&apos;re done.
-            </DrawerDescription>
-          </DrawerHeader>
-          <ProfileForm className="px-4" onOpenChange={onOpenChange}/>
-          <DrawerFooter className="pt-2">
-            <DrawerClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </div>
-      </DrawerContent>
-    </Drawer>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Add new Account</DialogTitle>
+          <DialogDescription>
+            Add your new trading account here. Click add when you&apos;re done.
+          </DialogDescription>
+        </DialogHeader>
+        <ProfileForm onOpenChange={onOpenChange} />
+      </DialogContent>
+    </Dialog>
   );
 }
 

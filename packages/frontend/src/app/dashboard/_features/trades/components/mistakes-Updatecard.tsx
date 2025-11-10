@@ -66,50 +66,50 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function MistakesUpdateCard() {
-  const isDesktop = useIsMobile();
-  const open = useTradeUIStore((s) => s.editOpen);
-  const onOpenChange = useTradeUIStore((s) => s.setEditOpen);
+  const isMobile = useIsMobile();
+  const open = useTradeUIStore((s) => s.mistakesOpen);
+  const onOpenChange = useTradeUIStore((s) => s.setMistakesOpen);
   const selectedId = useTradeUIStore((s) => s.selectedTradeId);
 
-  if (!isDesktop) {
+  if (isMobile) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Mistakes</DialogTitle>
-            <DialogDescription>
-              Add your Mistakes here. Click save when you&apos;re done.
-            </DialogDescription>
-          </DialogHeader>
-          <AccountForm onOpenChange={onOpenChange} selectedId={selectedId} />
-        </DialogContent>
-      </Dialog>
+      <Drawer open={open} onOpenChange={onOpenChange} modal={true}>
+        <DrawerContent>
+          <div className="mx-auto">
+            <DrawerHeader className="text-left">
+              <DrawerTitle>Edit Mistakes</DrawerTitle>
+              <DrawerDescription>
+                Add your Mistakes here. Click save when you&apos;re done.
+              </DrawerDescription>
+            </DrawerHeader>
+            <AccountForm
+              className="px-4"
+              onOpenChange={onOpenChange}
+              selectedId={selectedId}
+            />
+            <DrawerFooter className="pt-2">
+              <DrawerClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DrawerClose>
+            </DrawerFooter>
+          </div>
+        </DrawerContent>
+      </Drawer>
     );
   }
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} modal={false}>
-      <DrawerContent>
-        <div className="mx-auto">
-          <DrawerHeader className="text-left">
-            <DrawerTitle>Edit Mistakes</DrawerTitle>
-            <DrawerDescription>
-              Add your Mistakes here. Click save when you&apos;re done.
-            </DrawerDescription>
-          </DrawerHeader>
-          <AccountForm
-            className="px-4"
-            onOpenChange={onOpenChange}
-            selectedId={selectedId}
-          />
-          <DrawerFooter className="pt-2">
-            <DrawerClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </div>
-      </DrawerContent>
-    </Drawer>
+    <Dialog open={open} onOpenChange={onOpenChange} modal={true}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Edit Mistakes</DialogTitle>
+          <DialogDescription>
+            Add your Mistakes here. Click save when you&apos;re done.
+          </DialogDescription>
+        </DialogHeader>
+        <AccountForm onOpenChange={onOpenChange} selectedId={selectedId} />
+      </DialogContent>
+    </Dialog>
   );
 }
 

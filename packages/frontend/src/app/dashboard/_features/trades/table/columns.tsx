@@ -61,12 +61,12 @@ function PlanSelectCell({ trade }: { trade: Trade }) {
 }
 
 function MistakeCell({ trade }: { trade: Trade }) {
-  const setEditOpen = useTradeUIStore((s) => s.setEditOpen);
+  const setMistakesOpen = useTradeUIStore((s) => s.setMistakesOpen);
   const setSelectedTradeId = useTradeUIStore((s) => s.setSelectedTradeId);
 
   const handleClick = () => {
     setSelectedTradeId(trade.id);
-    setEditOpen(true);
+    setMistakesOpen(true);
   };
 
   if (trade.mistakes?.length > 0) {
@@ -233,6 +233,14 @@ export const columns: ColumnDef<Trade>[] = [
     id: "actions",
     cell: ({ row }) => {
       const trade = row.original;
+      const setEditOpen = useTradeUIStore((s) => s.setEditOpen);
+      const setSelectedTradeId = useTradeUIStore((s) => s.setSelectedTradeId);
+
+      const handleEdit = () => {
+        setSelectedTradeId(trade.id);
+        setEditOpen(true);
+      };
+
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -243,6 +251,9 @@ export const columns: ColumnDef<Trade>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+            <DropdownMenuItem onClick={handleEdit}>
+              Edit Trade
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigator.clipboard.writeText(trade.id)}>
               Copy Trade ID
             </DropdownMenuItem>

@@ -9,6 +9,7 @@ const permissions = {
     'read:public',
     'read:paid',
     'create:import',
+    'create:trade', 'read:trade', 'update:trade', 'delete:trade',
     'create:plan', 'update:plan', 'delete:plan',
   ]
 };

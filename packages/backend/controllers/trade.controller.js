@@ -30,11 +30,19 @@ exports.getAllTrades = async (req, res) => {
 
 exports.getTrade = async (req, res) => {
   const { id } = req.params;
+  const { id: userId } = req.user;
+
   try {
     const trade = await Trade.findByPk(id);
     if (!trade) {
       return res.status(404).json({ message: "Trade not found" });
     }
+
+    // Verify ownership
+    if (trade.userId !== userId) {
+      return res.status(403).json({ message: "Forbidden: You can only view your own trades" });
+    }
+
     res.status(200).json(trade);
   } catch (err) {
     console.error("Error fetching trade:", err);
@@ -45,27 +53,52 @@ exports.getTrade = async (req, res) => {
 };
 
 exports.createTrade = async (req, res) => {
-  const { ticker, side, quantity, entry, exit, account, realized, time, date } =
-    req.body;
+  const {
+    ticker,
+    side,
+    quantity,
+    entry,
+    exit,
+    account,
+    accountId,
+    realized,
+    time,
+    date,
+    fees,
+    grade,
+    mistakes,
+    notes,
+    planId,
+    security,
+    broker
+  } = req.body;
+  const { id: userId } = req.user;
 
-  if (!ticker || !side || !quantity || !entry || !exit || !date) {
+  // Validate required fields
+  if (!ticker || !side || !quantity || !entry || !exit || !date || !time || !account) {
     return res.status(400).json({ message: "Missing required fields" });
   }
 
   try {
     const trade = await Trade.create({
-      ...(req.body || {
-        ticker,
-        side,
-        quantity,
-        entry,
-        exit,
-        account,
-        realized,
-        time,
-        date,
-        userId: req.body.id,
-      }),
+      ticker,
+      side,
+      quantity,
+      entry,
+      exit,
+      account,
+      accountId: accountId || null,
+      realized: realized || 0,
+      time,
+      date,
+      fees: fees || 0,
+      grade: grade || null,
+      mistakes: mistakes || null,
+      notes: notes || null,
+      planId: planId || null,
+      security: security || 'stock',
+      broker: broker || null,
+      userId,
     });
     res.status(201).json(trade);
   } catch (err) {
@@ -78,30 +111,56 @@ exports.createTrade = async (req, res) => {
 
 exports.updateTrade = async (req, res) => {
   const { id } = req.params;
-  const { ticker, side, quantity, entry, exit, accountId, realized, time, date, grade, planId, mistakes, fees } =
-    req.body;
+  const { id: userId } = req.user;
+  const {
+    ticker,
+    side,
+    quantity,
+    entry,
+    exit,
+    account,
+    accountId,
+    realized,
+    time,
+    date,
+    grade,
+    planId,
+    mistakes,
+    fees,
+    notes,
+    security,
+    broker
+  } = req.body;
 
   const updateData = {};
 
-  if (ticker) updateData.ticker = ticker;
-  if (side) updateData.side = side;
-  if (quantity) updateData.quantity = quantity;
-  if (entry) updateData.entry = entry;
-  if (exit) updateData.exit = exit;
-  if (accountId) updateData.accountId = accountId;
-  if (realized) updateData.realized = realized;
-  if (time) updateData.time = time;
-  if (date) updateData.date = date;
-  if (grade) updateData.grade = grade;
-  if (planId) updateData.planId = planId;
-  if (mistakes) updateData.mistakes = mistakes;
-  if (fees) updateData.fees = fees;
-
+  if (ticker !== undefined) updateData.ticker = ticker;
+  if (side !== undefined) updateData.side = side;
+  if (quantity !== undefined) updateData.quantity = quantity;
+  if (entry !== undefined) updateData.entry = entry;
+  if (exit !== undefined) updateData.exit = exit;
+  if (account !== undefined) updateData.account = account;
+  if (accountId !== undefined) updateData.accountId = accountId;
+  if (realized !== undefined) updateData.realized = realized;
+  if (time !== undefined) updateData.time = time;
+  if (date !== undefined) updateData.date = date;
+  if (grade !== undefined) updateData.grade = grade;
+  if (planId !== undefined) updateData.planId = planId;
+  if (mistakes !== undefined) updateData.mistakes = mistakes;
+  if (fees !== undefined) updateData.fees = fees;
+  if (notes !== undefined) updateData.notes = notes;
+  if (security !== undefined) updateData.security = security;
+  if (broker !== undefined) updateData.broker = broker;
 
   try {
     const trade = await Trade.findByPk(id);
     if (!trade) {
       return res.status(404).json({ message: "Trade not found" });
+    }
+
+    // Verify ownership
+    if (trade.userId !== userId) {
+      return res.status(403).json({ message: "Forbidden: You can only update your own trades" });
     }
 
     await trade.update(updateData);
@@ -116,19 +175,23 @@ exports.updateTrade = async (req, res) => {
 
 exports.deleteTrade = async (req, res) => {
   const { ids } = req.body;
+  const { id: userId } = req.user;
+
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ message: "No trade IDs provided" });
   }
 
   try {
+    // Only delete trades that belong to the user
     const deletedCount = await Trade.destroy({
       where: {
         id: ids,
+        userId: userId, // Ensure user can only delete their own trades
       },
     });
 
     if (deletedCount === 0) {
-      return res.status(404).json({ message: "No matching trades found" });
+      return res.status(404).json({ message: "No matching trades found or unauthorized" });
     }
 
     res.status(200).json({

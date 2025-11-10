@@ -31,6 +31,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import MistakesUpdateCard from "../components/mistakes-Updatecard";
+import AddTradeForm from "../components/add-trade-form";
+import EditTradeForm from "../components/edit-trade-form";
 import { deleteTrades } from "@/actions/trades/trades";
 import useSWR, { mutate } from "swr";
 import { toast } from "sonner";
@@ -64,6 +66,8 @@ export function DataTable<TData, TValue>({
   const { data: accounts } = useSWR<Account[]>("/account/", fetcher);
   const { data: plans } = useSWR<Account[]>("/plan/", fetcher);
   const setFilter = useTradeUIStore((s) => s.setFilter);
+  const addOpen = useTradeUIStore((s) => s.addOpen);
+  const setAddOpen = useTradeUIStore((s) => s.setAddOpen);
 
   return (
     <>
@@ -110,6 +114,7 @@ export function DataTable<TData, TValue>({
         </div>
 
         <div className="flex items-center space-x-2">
+          <AddTradeForm open={addOpen} onOpenChange={setAddOpen} />
           <Button
             variant="outline"
             size="sm"
@@ -208,6 +213,7 @@ export function DataTable<TData, TValue>({
         </Button>
       </div>
       <MistakesUpdateCard />
+      <EditTradeForm />
     </>
   );
 }
