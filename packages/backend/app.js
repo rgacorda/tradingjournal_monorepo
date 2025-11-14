@@ -41,6 +41,8 @@ const planRoutes = require("./routes/plan.routes");
 app.use("/plan", planRoutes);
 const accountRoutes = require("./routes/account.routes");
 app.use("/account", accountRoutes);
+const mistakeRoutes = require("./routes/mistake.routes");
+app.use("/mistake", mistakeRoutes);
 
 // DB SYNC & SERVER START
 const PORT = process.env.PORT;

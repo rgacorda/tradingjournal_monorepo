@@ -42,10 +42,6 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-    mistakes: {
-      type: DataTypes.JSON,
-      allowNull: true,
-    },
     notes: {
       type: DataTypes.STRING,
       allowNull: true,
@@ -96,8 +92,8 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       references: {
         model: "Accounts",
-        key: "id"
-      }
-    }
+        key: "id",
+      },
+    },
   });
 };

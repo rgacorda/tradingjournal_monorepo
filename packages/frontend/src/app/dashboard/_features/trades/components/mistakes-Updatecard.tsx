@@ -47,12 +47,12 @@ import {
 import { toast } from "sonner";
 import { mutate } from "swr";
 import { useTradeUIStore } from "@/stores/trade-ui-store";
+import { getTradebyId, updateTrade, Trade } from "@/actions/trades/trades";
 import {
-  getTradebyId,
-  updateTrade,
-  getTrades,
-  Trade,
-} from "@/actions/trades/trades";
+  getMistakes,
+  createMistake,
+  Mistake,
+} from "@/actions/mistakes/mistakes";
 import { Badge } from "@/components/ui/badge";
 import { AxiosError } from "axios";
 
@@ -60,7 +60,7 @@ const formSchema = z.object({
   mistake_input: z
     .string()
     .min(1, { message: "Mistake is required" })
-    .max(50, { message: "Mistake must be at most 50 characters" }),
+    .max(100, { message: "Mistake must be at most 100 characters" }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -129,46 +129,36 @@ function AccountForm({
     },
   });
 
-  const [mistakes, setMistakes] = React.useState<string[]>([]);
-  const [previousMistakes, setPreviousMistakes] = React.useState<string[]>([]);
+  const [selectedMistakes, setSelectedMistakes] = React.useState<Mistake[]>([]);
+  const [allMistakes, setAllMistakes] = React.useState<Mistake[]>([]);
   const [open, setOpen] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState("");
 
-  // Fetch all previous mistakes from all trades
+  // Fetch all mistakes from the database
   React.useEffect(() => {
     const fetchAllMistakes = async () => {
       try {
-        const trades = await getTrades();
-        if (Array.isArray(trades)) {
-          // Extract all unique mistakes from all trades
-          const allMistakes = trades.reduce((acc: string[], trade: Trade) => {
-            if (Array.isArray(trade.mistakes)) {
-              return [...acc, ...trade.mistakes];
-            }
-            return acc;
-          }, []);
-          // Remove duplicates and filter strings only
-          const uniqueMistakes = Array.from(new Set(allMistakes)).filter(
-            (m): m is string => typeof m === "string"
-          );
-          setPreviousMistakes(uniqueMistakes);
+        const mistakes = await getMistakes();
+        if (Array.isArray(mistakes)) {
+          setAllMistakes(mistakes);
         }
       } catch (err) {
-        console.error("Failed to fetch previous mistakes:", err);
+        console.error("Failed to fetch mistakes:", err);
       }
     };
 
     fetchAllMistakes();
   }, []);
 
+  // Fetch current trade's mistakes
   React.useEffect(() => {
     if (!selectedId) return;
 
     const fetchTrade = async () => {
       try {
         const trade = await getTradebyId(selectedId);
-        if (Array.isArray(trade?.mistakes)) {
-          setMistakes(trade.mistakes);
+        if (Array.isArray(trade?.Mistakes)) {
+          setSelectedMistakes(trade.Mistakes);
         }
       } catch (err) {
         const error = err as AxiosError;
@@ -181,24 +171,55 @@ function AccountForm({
   }, [selectedId]);
 
   // Add mistake using form validation or from combobox
-  const handleAddMistake = async (value?: string) => {
-    const inputValue = value || methods.getValues("mistake_input").trim();
+  const handleAddMistake = async (mistakeToAdd?: Mistake | string) => {
+    try {
+      let mistake: Mistake;
 
-    if (!inputValue) {
-      return;
-    }
+      if (typeof mistakeToAdd === "object") {
+        // Selected from existing mistakes
+        mistake = mistakeToAdd;
+      } else {
+        // Create new or use typed value
+        const inputValue =
+          mistakeToAdd || methods.getValues("mistake_input").trim();
 
-    // Validate if not coming from combobox selection
-    if (!value) {
-      const isValid = await methods.trigger("mistake_input");
-      if (!isValid) return;
-    }
+        if (!inputValue) {
+          return;
+        }
 
-    if (!mistakes.includes(inputValue)) {
-      setMistakes((prev) => [...prev, inputValue]);
+        // Validate if not coming from combobox selection
+        if (!mistakeToAdd) {
+          const isValid = await methods.trigger("mistake_input");
+          if (!isValid) return;
+        }
+
+        // Check if mistake already exists in database
+        const existingMistake = allMistakes.find(
+          (m) => m.name.toLowerCase() === inputValue.toLowerCase()
+        );
+
+        if (existingMistake) {
+          mistake = existingMistake;
+        } else {
+          // Create new mistake
+          const newMistake = await createMistake(inputValue);
+          mistake = newMistake;
+          // Update local state with new mistake
+          setAllMistakes((prev) => [...prev, newMistake]);
+        }
+      }
+
+      // Add to selected if not already there
+      if (!selectedMistakes.find((m) => m.id === mistake.id)) {
+        setSelectedMistakes((prev) => [...prev, mistake]);
+      }
+
       methods.setValue("mistake_input", "");
       setSearchValue("");
       setOpen(false);
+    } catch (err) {
+      const error = err as AxiosError<{ message?: string }>;
+      toast.error(error.response?.data?.message || "Failed to add mistake.");
     }
   };
 
@@ -207,7 +228,8 @@ function AccountForm({
     if (!selectedId) return;
 
     try {
-      await updateTrade(selectedId, { mistakes }); // <-- Save the array
+      const mistakeIds = selectedMistakes.map((m) => m.id);
+      await updateTrade(selectedId, { mistakeIds });
       mutate("/trade/");
       toast.success("Mistakes updated successfully.");
       onOpenChange(false);
@@ -217,6 +239,13 @@ function AccountForm({
       toast.error(message);
     }
   };
+
+  // Filter available mistakes (not already selected)
+  const availableMistakes = allMistakes.filter(
+    (m) =>
+      !selectedMistakes.find((sm) => sm.id === m.id) &&
+      m.name.toLowerCase().includes(searchValue.toLowerCase())
+  );
 
   return (
     <FormProvider {...methods}>
@@ -273,34 +302,26 @@ function AccountForm({
                     <CommandList>
                       <CommandEmpty>
                         <div className="text-sm text-muted-foreground p-2">
-                          No previous mistakes found. Press Enter to add &quot;
+                          No mistakes found. Press Enter to add &quot;
                           {searchValue}&quot;
                         </div>
                       </CommandEmpty>
-                      {previousMistakes.length > 0 && (
-                        <CommandGroup heading="Previous Mistakes">
-                          {previousMistakes
-                            .filter(
-                              (mistake) =>
-                                !mistakes.includes(mistake) &&
-                                mistake
-                                  .toLowerCase()
-                                  .includes(searchValue.toLowerCase())
-                            )
-                            .map((mistake) => (
-                              <CommandItem
-                                key={mistake}
-                                value={mistake}
-                                onSelect={(value) => {
-                                  handleAddMistake(value);
-                                }}
-                              >
-                                <Check
-                                  className={cn("mr-2 h-4 w-4", "opacity-0")}
-                                />
-                                {mistake}
-                              </CommandItem>
-                            ))}
+                      {availableMistakes.length > 0 && (
+                        <CommandGroup heading="Available Mistakes">
+                          {availableMistakes.map((mistake) => (
+                            <CommandItem
+                              key={mistake.id}
+                              value={mistake.name}
+                              onSelect={() => {
+                                handleAddMistake(mistake);
+                              }}
+                            >
+                              <Check
+                                className={cn("mr-2 h-4 w-4", "opacity-0")}
+                              />
+                              {mistake.name}
+                            </CommandItem>
+                          ))}
                         </CommandGroup>
                       )}
                     </CommandList>
@@ -313,14 +334,16 @@ function AccountForm({
         />
 
         <div className="flex flex-wrap gap-2">
-          {mistakes.map((item, index) => (
-            <Badge key={index} variant={"outline"}>
-              {item}
+          {selectedMistakes.map((mistake) => (
+            <Badge key={mistake.id} variant={"outline"}>
+              {mistake.name}
               <button
                 type="button"
                 className="text-red-500 ml-2"
                 onClick={() => {
-                  setMistakes((prev) => prev.filter((_, i) => i !== index));
+                  setSelectedMistakes((prev) =>
+                    prev.filter((m) => m.id !== mistake.id)
+                  );
                 }}
               >
                 ✕

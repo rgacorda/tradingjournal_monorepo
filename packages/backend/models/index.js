@@ -6,6 +6,7 @@ const Trade = require("./trade.model")(sequelize, DataTypes);
 const Plan = require("./plan.model")(sequelize, DataTypes);
 const Account = require("./account.model")(sequelize, DataTypes);
 const RefreshToken = require("./token.model")(sequelize, DataTypes);
+const Mistake = require("./mistake.model")(sequelize, DataTypes);
 
 // Add models to the db object
 const db = {};
@@ -16,13 +17,14 @@ db.Plan = Plan;
 db.Trade = Trade;
 db.Account = Account;
 db.RefreshToken = RefreshToken;
+db.Mistake = Mistake;
 
 //associations
 User.hasMany(RefreshToken, { foreignKey: "userId", onDelete: "CASCADE" });
 RefreshToken.belongsTo(User, { foreignKey: "userId" });
 
-User.hasMany(Account, {foreignKey: "userId", onDelete: "CASCADE"});
-Account.belongsTo(User, {foreignKey: "userId"});
+User.hasMany(Account, { foreignKey: "userId", onDelete: "CASCADE" });
+Account.belongsTo(User, { foreignKey: "userId" });
 
 User.hasMany(Plan, { foreignKey: "userId" });
 Plan.belongsTo(User, { foreignKey: "userId" });
@@ -33,9 +35,24 @@ Trade.belongsTo(User, { foreignKey: "userId" });
 Plan.hasOne(Trade, { foreignKey: "planId" });
 Trade.belongsTo(Plan, { foreignKey: "planId" });
 
-Account.hasMany(Trade, {foreignKey: "accountId"});
-Trade.belongsTo(Account, {foreignKey: "accountId"});
+Account.hasMany(Trade, { foreignKey: "accountId" });
+Trade.belongsTo(Account, { foreignKey: "accountId" });
 
+User.hasMany(Mistake, { foreignKey: "userId", onDelete: "CASCADE" });
+Mistake.belongsTo(User, { foreignKey: "userId" });
 
+// Many-to-Many: Trade <-> Mistake
+Trade.belongsToMany(Mistake, {
+  through: "TradeMistakes",
+  foreignKey: "tradeId",
+  otherKey: "mistakeId",
+  as: "Mistakes",
+});
+Mistake.belongsToMany(Trade, {
+  through: "TradeMistakes",
+  foreignKey: "mistakeId",
+  otherKey: "tradeId",
+  as: "Trades",
+});
 
 module.exports = db;

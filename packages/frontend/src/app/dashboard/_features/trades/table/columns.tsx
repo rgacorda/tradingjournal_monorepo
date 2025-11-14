@@ -13,7 +13,15 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectLabel, SelectItem } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectGroup,
+  SelectLabel,
+  SelectItem,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -39,7 +47,9 @@ function PlanSelectCell({ trade }: { trade: Trade }) {
           toast.success("Trade updated successfully.");
         } catch (error) {
           const axiosError = error as AxiosError<{ message?: string }>;
-          toast.error(axiosError.response?.data?.message || "Failed to update trade.");
+          toast.error(
+            axiosError.response?.data?.message || "Failed to update trade."
+          );
         }
       }}
     >
@@ -69,15 +79,19 @@ function MistakeCell({ trade }: { trade: Trade }) {
     setMistakesOpen(true);
   };
 
-  if (trade.mistakes?.length > 0) {
+  if (trade.Mistakes && trade.Mistakes.length > 0) {
     return (
       <>
         <Badge variant="outline" className="text-xs mr-1" onClick={handleClick}>
-          {trade.mistakes[0]}
+          {trade.Mistakes[0].name}
         </Badge>
-        {trade.mistakes.length > 1 && (
-          <Badge variant="outline" className="text-xs mr-1" onClick={handleClick}>
-            +{trade.mistakes.length - 1}
+        {trade.Mistakes.length > 1 && (
+          <Badge
+            variant="outline"
+            className="text-xs mr-1"
+            onClick={handleClick}
+          >
+            +{trade.Mistakes.length - 1}
           </Badge>
         )}
       </>
@@ -96,7 +110,10 @@ export const columns: ColumnDef<Trade>[] = [
     id: "select",
     header: ({ table }) => (
       <Checkbox
-        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select all"
       />
@@ -112,16 +129,19 @@ export const columns: ColumnDef<Trade>[] = [
   {
     accessorKey: "date",
     header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+      <Button
+        variant="ghost"
+        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      >
         Date
         <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
     cell: ({ row }) => {
-  const value = row.getValue("date") as string;
-  // Parse DATEONLY string correctly to avoid timezone shifts
-  return <div>{format(parseDateOnly(value), "MMM dd, yyyy")}</div>;
-},
+      const value = row.getValue("date") as string;
+      // Parse DATEONLY string correctly to avoid timezone shifts
+      return <div>{format(parseDateOnly(value), "MMM dd, yyyy")}</div>;
+    },
     sortingFn: (rowA, rowB, columnId) => {
       // Parse DATEONLY strings correctly for sorting
       const a = parseDateOnly(rowA.getValue(columnId) as string).getTime();
@@ -142,8 +162,13 @@ export const columns: ColumnDef<Trade>[] = [
     header: "Side",
     cell: ({ row }) => {
       const side = row.getValue("side") as string;
-      const color = side.toLowerCase() === "long" ? "text-green-500" : "text-red-500";
-      return <div className={color}>{side.charAt(0).toUpperCase() + side.slice(1)}</div>;
+      const color =
+        side.toLowerCase() === "long" ? "text-green-500" : "text-red-500";
+      return (
+        <div className={color}>
+          {side.charAt(0).toUpperCase() + side.slice(1)}
+        </div>
+      );
     },
   },
   {
@@ -177,11 +202,16 @@ export const columns: ColumnDef<Trade>[] = [
           const newValue = Number(e.target.value);
           if (newValue !== row.original.grade) {
             try {
-              await updateTrade(row.original.id, { ...row.original, grade: newValue });
+              await updateTrade(row.original.id, {
+                ...row.original,
+                grade: newValue,
+              });
               toast.success("Grade updated successfully.");
             } catch (error) {
               const axiosError = error as AxiosError<{ message?: string }>;
-              toast.error(axiosError.response?.data?.message || "Failed to update grade.");
+              toast.error(
+                axiosError.response?.data?.message || "Failed to update grade."
+              );
             }
           }
         }}
@@ -204,12 +234,17 @@ export const columns: ColumnDef<Trade>[] = [
           const newValue = parseFloat(e.target.value);
           if (!isNaN(newValue) && newValue !== row.original.fees) {
             try {
-              await updateTrade(row.original.id, { ...row.original, fees: newValue });
+              await updateTrade(row.original.id, {
+                ...row.original,
+                fees: newValue,
+              });
               mutate("/trade/");
               toast.success("Fees updated successfully.");
             } catch (error) {
               const axiosError = error as AxiosError<{ message?: string }>;
-              toast.error(axiosError.response?.data?.message || "Failed to update fees.");
+              toast.error(
+                axiosError.response?.data?.message || "Failed to update fees."
+              );
             }
           }
         }}
@@ -226,7 +261,9 @@ export const columns: ColumnDef<Trade>[] = [
         currency: "USD",
       }).format(amount);
       const color = amount >= 0 ? "text-green-500" : "text-red-500";
-      return <div className={`${color} text-right font-medium`}>{formatted}</div>;
+      return (
+        <div className={`${color} text-right font-medium`}>{formatted}</div>
+      );
     },
   },
   {
@@ -251,10 +288,10 @@ export const columns: ColumnDef<Trade>[] = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={handleEdit}>
-              Edit Trade
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(trade.id)}>
+            <DropdownMenuItem onClick={handleEdit}>Edit Trade</DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => navigator.clipboard.writeText(trade.id)}
+            >
               Copy Trade ID
             </DropdownMenuItem>
           </DropdownMenuContent>

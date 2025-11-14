@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import { AxiosError } from "axios";
+import { Mistake } from "../mistakes/mistakes";
 
 export type Trade = {
   id: string;
@@ -10,7 +11,7 @@ export type Trade = {
   exit: number;
   fees: number;
   grade: number;
-  mistakes: string[];
+  Mistakes?: Mistake[];
   notes: string;
   date: string;
   time: string;
@@ -23,13 +24,12 @@ export type Trade = {
 
 // ✅ Central error handler to avoid code duplication
 const handleAxiosError = (error: unknown, fallbackMessage: string): never => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "isAxiosError" in error
-  ) {
+  if (typeof error === "object" && error !== null && "isAxiosError" in error) {
     const axiosError = error as AxiosError<{ message?: string }>;
-    console.error(fallbackMessage, axiosError.response?.data || axiosError.message);
+    console.error(
+      fallbackMessage,
+      axiosError.response?.data || axiosError.message
+    );
     throw new Error(axiosError.response?.data?.message || fallbackMessage);
   }
 
@@ -65,7 +65,10 @@ export const getTradebyId = async (id: string | null) => {
   }
 };
 
-export const updateTrade = async (id: string | null, data: Partial<Trade>) => {
+export const updateTrade = async (
+  id: string | null,
+  data: Partial<Trade> & { mistakeIds?: string[] }
+) => {
   if (!id) return;
   try {
     const res = await api.put(`/trade/${id}`, data);
