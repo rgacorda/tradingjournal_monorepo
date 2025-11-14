@@ -3,7 +3,7 @@ import * as React from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon, Check, ChevronsUpDown } from "lucide-react";
+import { PlusIcon, Check, ChevronsUpDown, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -38,6 +38,16 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   FormField,
   FormItem,
   FormLabel,
@@ -51,6 +61,7 @@ import { getTradebyId, updateTrade, Trade } from "@/actions/trades/trades";
 import {
   getMistakes,
   createMistake,
+  deleteMistakes,
   Mistake,
 } from "@/actions/mistakes/mistakes";
 import { Badge } from "@/components/ui/badge";
@@ -133,6 +144,10 @@ function AccountForm({
   const [allMistakes, setAllMistakes] = React.useState<Mistake[]>([]);
   const [open, setOpen] = React.useState(false);
   const [searchValue, setSearchValue] = React.useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [mistakeToDelete, setMistakeToDelete] = React.useState<Mistake | null>(
+    null
+  );
 
   // Fetch all mistakes from the database
   React.useEffect(() => {
@@ -247,6 +262,37 @@ function AccountForm({
       m.name.toLowerCase().includes(searchValue.toLowerCase())
   );
 
+  // Handle delete mistake
+  const handleDeleteMistake = async () => {
+    if (!mistakeToDelete) return;
+
+    try {
+      await deleteMistakes([mistakeToDelete.id]);
+
+      // Remove from all mistakes list
+      setAllMistakes((prev) => prev.filter((m) => m.id !== mistakeToDelete.id));
+
+      // Remove from selected mistakes if it's there
+      setSelectedMistakes((prev) =>
+        prev.filter((m) => m.id !== mistakeToDelete.id)
+      );
+
+      toast.success("Mistake deleted successfully.");
+      setDeleteDialogOpen(false);
+      setMistakeToDelete(null);
+    } catch (err) {
+      const error = err as AxiosError<{ message?: string }>;
+      toast.error(error.response?.data?.message || "Failed to delete mistake.");
+    }
+  };
+
+  // Open delete confirmation dialog
+  const confirmDeleteMistake = (mistake: Mistake, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent the CommandItem from being selected
+    setMistakeToDelete(mistake);
+    setDeleteDialogOpen(true);
+  };
+
   return (
     <FormProvider {...methods}>
       <form className={cn("grid items-start gap-4", className)}>
@@ -315,11 +361,26 @@ function AccountForm({
                               onSelect={() => {
                                 handleAddMistake(mistake);
                               }}
+                              className="flex items-center justify-between group pr-2"
                             >
-                              <Check
-                                className={cn("mr-2 h-4 w-4", "opacity-0")}
-                              />
-                              {mistake.name}
+                              <div className="flex items-center flex-1">
+                                <Check
+                                  className={cn("mr-2 h-4 w-4", "opacity-0")}
+                                />
+                                {mistake.name}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) =>
+                                  confirmDeleteMistake(mistake, e)
+                                }
+                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 shrink-0"
+                                aria-label="Delete mistake"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             </CommandItem>
                           ))}
                         </CommandGroup>
@@ -356,6 +417,27 @@ function AccountForm({
           Save
         </Button>
       </form>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the mistake &quot;
+              {mistakeToDelete?.name}&quot;. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteMistake}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </FormProvider>
   );
 }

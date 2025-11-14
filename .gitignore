@@ -97,6 +97,7 @@ uploads/
 temp/
 tmp/
 *.cache
+backup.sql
 
 # Lock files (optional - uncomment if you want to ignore them)
 # yarn.lock
