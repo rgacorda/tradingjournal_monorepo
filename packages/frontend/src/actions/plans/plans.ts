@@ -4,7 +4,10 @@ import { AxiosError } from "axios";
 const handleAxiosError = (error: unknown, fallbackMessage: string) => {
   if (error && typeof error === "object" && "isAxiosError" in error) {
     const axiosError = error as AxiosError<{ message?: string }>;
-    console.error(fallbackMessage, axiosError.response?.data || axiosError.message);
+    console.error(
+      fallbackMessage,
+      axiosError.response?.data || axiosError.message
+    );
     throw new Error(axiosError.response?.data?.message || fallbackMessage);
   }
 
@@ -62,5 +65,14 @@ export const deletePlan = async (id: string | null) => {
     return res.data;
   } catch (error: unknown) {
     handleAxiosError(error, "Delete plan failed");
+  }
+};
+
+export const getPlanStatistics = async () => {
+  try {
+    const res = await api.get("/plan/statistics");
+    return res.data;
+  } catch (error: unknown) {
+    handleAxiosError(error, "Get plan statistics failed");
   }
 };
