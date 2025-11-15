@@ -24,16 +24,19 @@ Complete guide for deploying the Trading Journal application to AWS with Nginx r
 ## Prerequisites
 
 ### AWS Resources
+
 - EC2 instance (Ubuntu 20.04/22.04 recommended)
 - Security group with ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL - optional)
 - Elastic IP (recommended for stable IP address)
 - RDS MySQL instance (or MySQL on EC2)
 
 ### Domain Setup
+
 - GoDaddy domain purchased
 - AWS Route53 hosted zone configured
 
 ### Local Requirements
+
 - SSH key pair for EC2 access
 - Git repository (GitHub, GitLab, etc.)
 
@@ -550,6 +553,7 @@ Certbot automatically creates a cron job or systemd timer for renewal.
 ### Step 2: Get Route53 Name Servers
 
 After creating the hosted zone, AWS provides 4 name servers:
+
 ```
 ns-1234.awsdns-12.org
 ns-5678.awsdns-34.net
@@ -902,6 +906,7 @@ crontab -e
 ```
 
 Add:
+
 ```
 0 2 * * * /var/www/app/backup-db.sh
 ```
@@ -955,9 +960,554 @@ sudo tail -f /var/log/nginx/error.log
 ## Support
 
 For issues or questions, refer to:
+
 - [README.md](README.md) - Project documentation
 - Application logs via `journalctl`
 - Nginx logs in `/var/log/nginx/`
+
+---
+
+## Scaling Considerations
+
+### Application Scalability Assessment
+
+This section provides a comprehensive analysis of the application's readiness for horizontal and vertical scaling.
+
+#### Horizontal Scaling with Load Balancer
+
+##### ✅ What's Ready
+
+1. **Stateless Authentication**
+
+   - JWT tokens stored in HTTP-only cookies
+   - Tokens are self-contained and don't rely on server memory
+   - Any backend instance can validate tokens
+
+2. **Database-Backed Refresh Tokens**
+
+   - `RefreshToken` model stores tokens in MySQL
+   - Shared state across all instances
+   - Enables session validation from any server
+
+3. **No In-Memory Sessions**
+
+   - Application doesn't use `express-session` with memory store
+   - Excellent for load balancing
+
+4. **Standard REST API**
+   - Stateless API design
+   - Easy to replicate across multiple instances
+
+##### ❌ Critical Blockers (Must Fix)
+
+1. **File Uploads to Local Disk**
+
+   ```javascript
+   // Current: packages/backend/controllers/import.controller.js
+   const storage = multer.diskStorage({
+     destination: "./uploads/trades",
+     // ...
+   });
+   ```
+
+   **Problem:** Files saved to local filesystem on one server aren't accessible to other instances
+
+   **Solutions:**
+
+   **Option A: AWS S3 (Recommended)**
+
+   ```bash
+   npm install multer-s3 @aws-sdk/client-s3 --workspace=backend
+   ```
+
+   ```javascript
+   // Modified import.controller.js
+   const multerS3 = require("multer-s3");
+   const { S3Client } = require("@aws-sdk/client-s3");
+
+   const s3Client = new S3Client({
+     region: process.env.AWS_REGION,
+     credentials: {
+       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+     },
+   });
+
+   const upload = multer({
+     storage: multerS3({
+       s3: s3Client,
+       bucket: process.env.S3_BUCKET_NAME,
+       metadata: (req, file, cb) => {
+         cb(null, { fieldName: file.fieldname });
+       },
+       key: (req, file, cb) => {
+         cb(null, `uploads/trades/${Date.now()}-${file.originalname}`);
+       },
+     }),
+   });
+   ```
+
+   **Option B: AWS EFS (Shared File System)**
+
+   ```bash
+   # On each EC2 instance
+   sudo mount -t nfs4 -o nfsvers=4.1 \
+     fs-xxxxxx.efs.us-east-1.amazonaws.com:/ /var/www/app/uploads
+   ```
+
+2. **Cron Job Running on Every Instance**
+
+   ```javascript
+   // Current: packages/backend/cron/cleanupTokens.js
+   cron.schedule("0 0 * * *", async () => {
+     /* cleanup */
+   });
+   ```
+
+   **Problem:** Runs simultaneously on all instances causing redundant work
+
+   **Solutions:**
+
+   **Option A: AWS Lambda + EventBridge (Recommended)**
+
+   ```javascript
+   // Create separate Lambda function for cron jobs
+   // Remove cron from backend application
+
+   // Lambda handler:
+   const { Sequelize } = require("sequelize");
+   const { Op } = require("sequelize");
+
+   exports.handler = async (event) => {
+     const sequelize = new Sequelize(/* RDS connection */);
+     const RefreshToken = require("./models/token.model")(sequelize);
+
+     const deleted = await RefreshToken.destroy({
+       where: {
+         expiresAt: { [Op.lt]: new Date() },
+       },
+     });
+
+     console.log(`Cleaned ${deleted} expired tokens`);
+     return { statusCode: 200, body: JSON.stringify({ deleted }) };
+   };
+   ```
+
+   **Option B: Distributed Lock with Redis**
+
+   ```bash
+   npm install redis redlock --workspace=backend
+   ```
+
+   ```javascript
+   // Modified cleanupTokens.js
+   const Redis = require("redis");
+   const Redlock = require("redlock");
+
+   const redisClient = Redis.createClient({
+     url: process.env.REDIS_URL,
+   });
+   const redlock = new Redlock([redisClient]);
+
+   cron.schedule("0 0 * * *", async () => {
+     try {
+       const lock = await redlock.acquire(["cleanup-tokens"], 5000);
+       try {
+         // Perform cleanup
+         const deleted = await RefreshToken.destroy({
+           /* ... */
+         });
+         console.log(`Cleaned ${deleted} tokens`);
+       } finally {
+         await lock.release();
+       }
+     } catch (err) {
+       // Another instance is running the cleanup
+       console.log("Cleanup already running on another instance");
+     }
+   });
+   ```
+
+3. **Cookie Configuration**
+
+   ```javascript
+   // Current: packages/backend/config/cookie.js
+   domain: isProduction ? ".trade2learn.site" : undefined;
+   ```
+
+   ✅ **Status:** Already correct! The dot prefix allows subdomains
+
+   ⚠️ **Requirement:** Ensure load balancer uses matching domain (e.g., `api.trade2learn.site`)
+
+#### Load Balancer Setup
+
+##### AWS Application Load Balancer Configuration
+
+```bash
+# Create target group
+aws elbv2 create-target-group \
+  --name trading-backend-tg \
+  --protocol HTTP \
+  --port 8000 \
+  --vpc-id vpc-xxxxx \
+  --health-check-path /health \
+  --health-check-interval-seconds 30 \
+  --healthy-threshold-count 2 \
+  --unhealthy-threshold-count 3
+
+# Create load balancer
+aws elbv2 create-load-balancer \
+  --name trading-backend-alb \
+  --subnets subnet-xxxxx subnet-yyyyy \
+  --security-groups sg-xxxxx
+
+# Create listener
+aws elbv2 create-listener \
+  --load-balancer-arn arn:aws:elasticloadbalancing:... \
+  --protocol HTTPS \
+  --port 443 \
+  --certificates CertificateArn=arn:aws:acm:... \
+  --default-actions Type=forward,TargetGroupArn=arn:aws:elasticloadbalancing:...
+```
+
+##### Health Check Endpoint
+
+Add to `packages/backend/app.js`:
+
+```javascript
+// Health check endpoint for load balancer
+app.get("/health", (req, res) => {
+  res
+    .status(200)
+    .json({ status: "healthy", timestamp: new Date().toISOString() });
+});
+```
+
+##### Sticky Sessions (Temporary Solution)
+
+While fixing file upload issues:
+
+```bash
+# Enable sticky sessions on target group
+aws elbv2 modify-target-group-attributes \
+  --target-group-arn arn:aws:elasticloadbalancing:... \
+  --attributes Key=stickiness.enabled,Value=true \
+               Key=stickiness.type,Value=lb_cookie \
+               Key=stickiness.lb_cookie.duration_seconds,Value=86400
+```
+
+#### Database Scaling
+
+##### Connection Pooling (Must Implement)
+
+Modify `packages/backend/config/db.js`:
+
+```javascript
+const { Sequelize } = require("sequelize");
+require("dotenv").config();
+
+const sequelize = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASSWORD,
+  {
+    host: process.env.DB_HOST,
+    dialect: "mysql",
+    port: process.env.DB_PORT,
+    logging: false,
+    pool: {
+      max: 10, // Maximum connections per instance
+      min: 2, // Minimum idle connections
+      acquire: 30000, // Max time (ms) to get connection before error
+      idle: 10000, // Max idle time before releasing connection
+    },
+    retry: {
+      max: 3, // Retry failed queries
+    },
+  }
+);
+
+module.exports = sequelize;
+```
+
+**Important:** With 3 backend instances and max pool of 10:
+
+- Total max connections: 3 × 10 = 30 connections
+- Ensure MySQL `max_connections` > 30 (recommend 100+)
+
+##### Vertical Scaling (RDS)
+
+✅ **Ready:** No code changes needed
+
+```bash
+# Modify RDS instance class
+aws rds modify-db-instance \
+  --db-instance-identifier trading-journal-db \
+  --db-instance-class db.t3.medium \
+  --apply-immediately
+```
+
+Recommended instance progression:
+
+- Development: db.t3.micro (free tier)
+- Small production: db.t3.small
+- Medium production: db.t3.medium or db.r6g.large
+- Large production: db.r6g.xlarge or higher
+
+##### Read Replicas
+
+✅ **90% Ready:** Minor code changes needed
+
+```bash
+# Create read replica
+aws rds create-db-instance-read-replica \
+  --db-instance-identifier trading-journal-db-replica-1 \
+  --source-db-instance-identifier trading-journal-db \
+  --db-instance-class db.t3.small
+```
+
+Code modifications needed:
+
+```javascript
+// packages/backend/config/db.js
+const sequelizeWrite = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASSWORD,
+  {
+    host: process.env.DB_HOST_WRITE, // Primary instance
+    dialect: "mysql",
+    pool: { max: 10, min: 2 },
+  }
+);
+
+const sequelizeRead = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASSWORD,
+  {
+    host: process.env.DB_HOST_READ, // Read replica
+    dialect: "mysql",
+    pool: { max: 15, min: 3 }, // More connections for read
+    replication: {
+      read: [
+        { host: process.env.DB_HOST_READ_1 },
+        { host: process.env.DB_HOST_READ_2 }, // Multiple replicas
+      ],
+      write: { host: process.env.DB_HOST_WRITE },
+    },
+  }
+);
+
+module.exports = { sequelizeWrite, sequelizeRead };
+```
+
+Usage in controllers:
+
+```javascript
+// For read operations
+const users = await sequelizeRead.models.User.findAll();
+
+// For write operations
+const user = await sequelizeWrite.models.User.create({...});
+```
+
+##### Multi-AZ Deployment
+
+✅ **Ready:** No code changes needed
+
+```bash
+# Enable Multi-AZ
+aws rds modify-db-instance \
+  --db-instance-identifier trading-journal-db \
+  --multi-az \
+  --apply-immediately
+```
+
+Benefits:
+
+- Automatic failover to standby instance
+- Enhanced availability during maintenance
+- No application changes required
+
+#### Redis Implementation (Optional but Recommended)
+
+##### Use Cases
+
+1. Session storage (if migrating from cookies)
+2. Distributed locks for cron jobs
+3. Cache frequently accessed data
+4. Rate limiting
+5. Real-time features
+
+##### Setup
+
+```bash
+# Install dependencies
+npm install redis --workspace=backend
+```
+
+```javascript
+// packages/backend/config/redis.js
+const redis = require("redis");
+
+const redisClient = redis.createClient({
+  url: process.env.REDIS_URL, // e.g., redis://elasticache-endpoint:6379
+  socket: {
+    reconnectStrategy: (retries) => Math.min(retries * 50, 1000),
+  },
+});
+
+redisClient.on("error", (err) => console.error("Redis error:", err));
+redisClient.on("connect", () => console.log("Redis connected"));
+
+module.exports = redisClient;
+```
+
+Example caching:
+
+```javascript
+const redisClient = require("../config/redis");
+
+// Cache user data
+exports.getUser = async (req, res) => {
+  const userId = req.params.id;
+  const cacheKey = `user:${userId}`;
+
+  // Check cache first
+  const cached = await redisClient.get(cacheKey);
+  if (cached) {
+    return res.json(JSON.parse(cached));
+  }
+
+  // Fetch from database
+  const user = await User.findByPk(userId);
+
+  // Store in cache (expire in 5 minutes)
+  await redisClient.setEx(cacheKey, 300, JSON.stringify(user));
+
+  res.json(user);
+};
+```
+
+#### Scaling Roadmap
+
+##### Phase 1: Foundation (1-2 weeks)
+
+- [ ] Add connection pooling to Sequelize
+- [ ] Implement health check endpoint
+- [ ] Add application logging (Winston or Pino)
+- [ ] Set up monitoring (CloudWatch)
+- [ ] Enable RDS Multi-AZ
+
+##### Phase 2: Essential Fixes (2-3 weeks)
+
+- [ ] Migrate file uploads to S3
+  - Install `multer-s3` and `@aws-sdk/client-s3`
+  - Update `import.controller.js`
+  - Test upload/download functionality
+- [ ] Centralize cron jobs
+  - Create Lambda function for token cleanup
+  - Set up EventBridge schedule
+  - Remove cron from backend code
+- [ ] Add Redis for caching (optional)
+
+##### Phase 3: Load Balancing (1 week)
+
+- [ ] Create AWS Application Load Balancer
+- [ ] Configure target group with health checks
+- [ ] Deploy 2-3 backend instances
+- [ ] Update DNS to point to ALB
+- [ ] Test horizontal scaling
+
+##### Phase 4: Optimization (Ongoing)
+
+- [ ] Add RDS Read Replicas
+- [ ] Implement query caching
+- [ ] Add CDN for static assets
+- [ ] Set up auto-scaling groups
+- [ ] Implement blue-green deployments
+
+#### Cost Estimation
+
+##### Current (Single Instance)
+
+- EC2 t3.small: ~$15/month
+- RDS db.t3.micro: ~$15/month (free tier available)
+- Total: ~$30/month
+
+##### Scaled (3 Instances + Load Balancer)
+
+- EC2 t3.small × 3: ~$45/month
+- Application Load Balancer: ~$25/month
+- RDS db.t3.small: ~$30/month
+- RDS Multi-AZ: +$30/month
+- S3 storage (100GB): ~$2.30/month
+- ElastiCache (Redis) t3.micro: ~$15/month
+- Data transfer: ~$10/month
+- Total: ~$157/month
+
+##### Scaling Triggers
+
+- Add instances when CPU > 70% for 10+ minutes
+- Add read replicas when read queries > 1000/sec
+- Upgrade RDS when connections approach max
+- Add caching when database latency > 100ms
+
+#### Performance Benchmarks
+
+##### Current Expected Performance
+
+- Single instance: ~500-1000 req/sec
+- Database: ~2000 queries/sec (db.t3.small)
+
+##### After Horizontal Scaling
+
+- 3 instances: ~1500-3000 req/sec
+- With caching: ~5000-10000 req/sec
+- Read replicas: 2x-3x read performance
+
+#### Monitoring and Alerts
+
+##### CloudWatch Metrics to Track
+
+```bash
+# Backend metrics
+- CPU utilization > 80%
+- Memory utilization > 85%
+- Request count
+- Error rate > 1%
+- Response time > 1000ms
+
+# Database metrics
+- Connection count approaching max
+- CPU utilization > 80%
+- Read/Write IOPS
+- Replication lag (if using read replicas)
+- Disk space < 20%
+
+# Load Balancer metrics
+- Unhealthy host count > 0
+- Target response time
+- HTTP 5xx errors
+- Request count per target
+```
+
+##### Example CloudWatch Alarm
+
+```bash
+aws cloudwatch put-metric-alarm \
+  --alarm-name high-cpu-backend \
+  --alarm-description "Alert when CPU exceeds 80%" \
+  --metric-name CPUUtilization \
+  --namespace AWS/EC2 \
+  --statistic Average \
+  --period 300 \
+  --evaluation-periods 2 \
+  --threshold 80 \
+  --comparison-operator GreaterThanThreshold \
+  --alarm-actions arn:aws:sns:us-east-1:xxxxx:alerts
+```
 
 ---
 

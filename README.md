@@ -40,6 +40,7 @@ cp .env.example .env
 ```
 
 Edit the `.env` file with your configuration:
+
 - Database credentials (MySQL)
 - JWT secrets
 - CORS origins
@@ -48,15 +49,18 @@ Edit the `.env` file with your configuration:
 ### 3. Run Development Mode
 
 **Run both frontend and backend together:**
+
 ```bash
 npm run dev
 ```
 
 This starts:
+
 - Backend API on `http://localhost:5001`
 - Frontend on `http://localhost:3000`
 
 **Run individually:**
+
 ```bash
 # Backend only
 npm run backend:dev
@@ -69,17 +73,17 @@ npm run frontend:dev
 
 ### Root Level Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Run both frontend and backend in development mode |
-| `npm run build` | Build both projects for production |
-| `npm run start` | Start both projects in production mode |
-| `npm run lint` | Lint both projects |
-| `npm run clean` | Clean build artifacts and node_modules |
-| `npm run backend:dev` | Run only backend in development mode |
-| `npm run frontend:dev` | Run only frontend in development mode |
-| `npm run backend:start` | Start only backend in production mode |
-| `npm run frontend:start` | Start only frontend in production mode |
+| Command                  | Description                                       |
+| ------------------------ | ------------------------------------------------- |
+| `npm run dev`            | Run both frontend and backend in development mode |
+| `npm run build`          | Build both projects for production                |
+| `npm run start`          | Start both projects in production mode            |
+| `npm run lint`           | Lint both projects                                |
+| `npm run clean`          | Clean build artifacts and node_modules            |
+| `npm run backend:dev`    | Run only backend in development mode              |
+| `npm run frontend:dev`   | Run only frontend in development mode             |
+| `npm run backend:start`  | Start only backend in production mode             |
+| `npm run frontend:start` | Start only frontend in production mode            |
 
 ### Backend Specific Commands
 
@@ -117,6 +121,7 @@ npm run lint
 ## Technology Stack
 
 ### Frontend
+
 - **Framework:** Next.js 15.3.1 with App Router
 - **UI Library:** React 19.0.0
 - **Language:** TypeScript 5
@@ -129,6 +134,7 @@ npm run lint
 - **Rich Text:** Tiptap
 
 ### Backend
+
 - **Framework:** Express.js 5.1.0
 - **Database:** MySQL with Sequelize ORM
 - **Authentication:** JWT + bcryptjs
@@ -142,16 +148,19 @@ npm run lint
 ### Adding Dependencies
 
 **To frontend:**
+
 ```bash
 npm install <package> --workspace=frontend
 ```
 
 **To backend:**
+
 ```bash
 npm install <package> --workspace=backend
 ```
 
 **To root (dev tools):**
+
 ```bash
 npm install <package> -D -w
 ```
@@ -175,6 +184,7 @@ npm run start
 ## Features
 
 ### Frontend Features
+
 - User authentication with JWT
 - Interactive trading journal
 - Dashboard with charts and analytics
@@ -186,6 +196,7 @@ npm run start
 - Dark mode support
 
 ### Backend Features
+
 - RESTful API
 - User authentication & authorization
 - Trade CRUD operations
@@ -201,6 +212,7 @@ npm run start
 ### Port Already in Use
 
 If you get a port conflict error:
+
 - Backend runs on port 5001 (configurable in `.env`)
 - Frontend runs on port 3000 (default Next.js port)
 
@@ -213,6 +225,44 @@ If you get a port conflict error:
 ### Module Not Found Errors
 
 Run `npm install` at the root level to reinstall all dependencies.
+
+## Potential Improvements
+
+This application is designed with scalability in mind, but there are several areas for enhancement:
+
+### Horizontal Scaling Readiness
+
+- **Current State:** The application is ~70% ready for horizontal scaling with load balancers
+- **Blockers:** Local file storage and cron job synchronization
+- **Recommended Fixes:**
+  - Migrate file uploads from local disk to AWS S3 or EFS
+  - Centralize cron jobs using AWS Lambda + EventBridge or Redis distributed locks
+  - Implement session affinity (sticky sessions) on load balancer
+
+### Database Scaling Options
+
+- **Vertical Scaling:** ✅ Ready - increase RDS instance size without code changes
+- **Read Replicas:** ✅ 90% Ready - minor code modifications needed for read/write separation
+- **Multi-AZ Deployment:** ✅ Ready - enables automatic failover
+- **Connection Pooling:** Recommended to add Sequelize connection pool configuration
+
+### Performance Enhancements
+
+- Add Redis for caching frequently accessed data
+- Implement CDN for static assets
+- Add database query optimization and indexing
+- Enable response compression (gzip/brotli)
+- Implement rate limiting for API endpoints
+
+### Infrastructure Improvements
+
+- Set up CI/CD pipeline (GitHub Actions)
+- Add application monitoring (CloudWatch, DataDog)
+- Implement automated database backups
+- Add comprehensive logging and error tracking (Sentry)
+- Set up blue-green or canary deployments
+
+📖 **For detailed scaling analysis and implementation guide, see [DEPLOYMENT.md - Scaling Considerations](DEPLOYMENT.md#scaling-considerations)**
 
 ## Contributing
 
