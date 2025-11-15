@@ -11,6 +11,11 @@ router.post(
   mistakeController.createMistake
 );
 router.get("/", verifyToken, mistakeController.getAllMistakes);
+router.get(
+  "/analytics/data",
+  verifyToken,
+  mistakeController.getMistakeAnalytics
+);
 router.get("/:id", verifyToken, mistakeController.getMistake);
 router.put(
   "/:id",

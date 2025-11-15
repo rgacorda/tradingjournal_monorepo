@@ -9,6 +9,38 @@ export type Mistake = {
   updatedAt?: string;
 };
 
+export type MistakeAnalytics = {
+  mistakeId: string;
+  mistakeName: string;
+  frequency: {
+    count: number;
+    percentageOfTrades: number;
+  };
+  recency: {
+    lastOccurrence: string | null;
+    daysSinceLastOccurrence: number | null;
+  };
+  gradeAnalysis: {
+    averageGrade: number | null;
+    overallAverageGrade: number | null;
+    gradeImpact: number | null;
+    tradesWithGrades: number;
+  };
+  financialImpact: {
+    totalPnL: number;
+    averagePnL: number;
+  };
+};
+
+export type MistakeAnalyticsResponse = {
+  analytics: MistakeAnalytics[];
+  summary: {
+    totalMistakes: number;
+    totalTrades: number;
+    tradesWithMistakes: number;
+  };
+};
+
 // ✅ Central error handler to avoid code duplication
 const handleAxiosError = (error: unknown, fallbackMessage: string): never => {
   if (typeof error === "object" && error !== null && "isAxiosError" in error) {
@@ -75,3 +107,13 @@ export const deleteMistakes = async (ids: string[] | null) => {
     handleAxiosError(error, "Delete mistake failed");
   }
 };
+
+export const getMistakeAnalytics =
+  async (): Promise<MistakeAnalyticsResponse> => {
+    try {
+      const res = await api.get("/mistake/analytics/data");
+      return res.data;
+    } catch (error: unknown) {
+      return handleAxiosError(error, "Get mistake analytics failed");
+    }
+  };

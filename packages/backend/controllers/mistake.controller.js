@@ -162,3 +162,144 @@ exports.deleteMistake = async (req, res) => {
       .json({ message: "Failed to delete mistake", error: err.message });
   }
 };
+
+exports.getMistakeAnalytics = async (req, res) => {
+  const { id: userId } = req.user;
+  const { Trade } = require("../models");
+  const { sequelize } = require("../models");
+  const { QueryTypes } = require("sequelize");
+
+  try {
+    // Get all mistakes for the user
+    const mistakes = await Mistake.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Trade,
+          as: "Trades",
+          attributes: ["id", "grade", "realized", "date"],
+        },
+      ],
+    });
+
+    // Calculate analytics for each mistake
+    const analytics = await Promise.all(
+      mistakes.map(async (mistake) => {
+        const trades = mistake.Trades || [];
+
+        // Frequency Analysis
+        const frequency = trades.length;
+        const totalTrades = await Trade.count({ where: { userId } });
+        const percentageOfTrades =
+          totalTrades > 0 ? ((frequency / totalTrades) * 100).toFixed(2) : 0;
+
+        // Recency Tracking
+        let lastOccurrence = null;
+        let daysSinceLastOccurrence = null;
+
+        if (trades.length > 0) {
+          const sortedTrades = trades.sort(
+            (a, b) => new Date(b.date) - new Date(a.date)
+          );
+          lastOccurrence = sortedTrades[0].date;
+
+          const today = new Date();
+          const lastDate = new Date(lastOccurrence);
+          const diffTime = Math.abs(today - lastDate);
+          daysSinceLastOccurrence = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
+
+        // Grade Impact Analysis
+        const tradesWithGrades = trades.filter((t) => t.grade !== null);
+        const averageGrade =
+          tradesWithGrades.length > 0
+            ? (
+                tradesWithGrades.reduce((sum, t) => sum + t.grade, 0) /
+                tradesWithGrades.length
+              ).toFixed(2)
+            : null;
+
+        // Get average grade for all user's trades (for comparison)
+        const allTradesWithGrades = await Trade.findAll({
+          where: {
+            userId,
+            grade: { [require("sequelize").Op.ne]: null },
+          },
+          attributes: ["grade"],
+        });
+
+        const overallAverageGrade =
+          allTradesWithGrades.length > 0
+            ? (
+                allTradesWithGrades.reduce((sum, t) => sum + t.grade, 0) /
+                allTradesWithGrades.length
+              ).toFixed(2)
+            : null;
+
+        const gradeImpact =
+          averageGrade && overallAverageGrade
+            ? (averageGrade - overallAverageGrade).toFixed(2)
+            : null;
+
+        // Financial Impact
+        const totalPnL = trades
+          .reduce((sum, t) => sum + parseFloat(t.realized || 0), 0)
+          .toFixed(2);
+        const averagePnL =
+          trades.length > 0 ? (totalPnL / trades.length).toFixed(2) : 0;
+
+        return {
+          mistakeId: mistake.id,
+          mistakeName: mistake.name,
+          frequency: {
+            count: frequency,
+            percentageOfTrades: parseFloat(percentageOfTrades),
+          },
+          recency: {
+            lastOccurrence,
+            daysSinceLastOccurrence,
+          },
+          gradeAnalysis: {
+            averageGrade: averageGrade ? parseFloat(averageGrade) : null,
+            overallAverageGrade: overallAverageGrade
+              ? parseFloat(overallAverageGrade)
+              : null,
+            gradeImpact: gradeImpact ? parseFloat(gradeImpact) : null,
+            tradesWithGrades: tradesWithGrades.length,
+          },
+          financialImpact: {
+            totalPnL: parseFloat(totalPnL),
+            averagePnL: parseFloat(averagePnL),
+          },
+        };
+      })
+    );
+
+    // Sort by frequency (most common mistakes first)
+    analytics.sort((a, b) => b.frequency.count - a.frequency.count);
+
+    res.status(200).json({
+      analytics,
+      summary: {
+        totalMistakes: mistakes.length,
+        totalTrades: await Trade.count({ where: { userId } }),
+        tradesWithMistakes: await Trade.count({
+          where: { userId },
+          include: [
+            {
+              model: Mistake,
+              as: "Mistakes",
+              required: true,
+            },
+          ],
+        }),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching mistake analytics:", err);
+    res.status(500).json({
+      message: "Failed to fetch mistake analytics",
+      error: err.message,
+    });
+  }
+};
