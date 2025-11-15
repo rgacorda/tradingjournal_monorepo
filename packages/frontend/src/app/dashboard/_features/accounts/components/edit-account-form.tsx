@@ -212,7 +212,7 @@ function AccountForm({
           )}
         />
 
-        <Button type="submit">Add Account</Button>
+        <Button type="submit">Update Account</Button>
       </form>
     </FormProvider>
   );
