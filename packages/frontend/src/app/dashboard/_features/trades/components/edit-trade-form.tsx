@@ -57,7 +57,9 @@ import { format, parse } from "date-fns";
 const formSchema = z.object({
   ticker: z.string().min(1, { message: "Ticker is required" }).max(10),
   side: z.enum(["long", "short"], { message: "Side is required" }),
-  quantity: z.coerce.number().min(1, { message: "Quantity must be at least 1" }),
+  quantity: z.coerce
+    .number()
+    .min(1, { message: "Quantity must be at least 1" }),
   entry: z.coerce.number().min(0, { message: "Entry price must be positive" }),
   exit: z.coerce.number().min(0, { message: "Exit price must be positive" }),
   accountId: z.string().min(1, { message: "Account is required" }),
@@ -65,7 +67,11 @@ const formSchema = z.object({
   time: z.string().min(1, { message: "Time is required" }),
   realized: z.coerce.number().optional(),
   fees: z.coerce.number().optional(),
-  grade: z.coerce.number().min(1, { message: "Grade must be 1-5" }).max(5, { message: "Grade must be 1-5" }).optional(),
+  grade: z.coerce
+    .number()
+    .min(1, { message: "Grade must be 1-5" })
+    .max(5, { message: "Grade must be 1-5" })
+    .optional(),
   notes: z.string().optional(),
 });
 
@@ -187,17 +193,12 @@ function TradeForm({
 
   const onSubmit = async (values: FormValues) => {
     try {
-      // Find the account name from accountId
-      const selectedAccount = accounts?.find(acc => acc.id === values.accountId);
-      const accountName = selectedAccount?.name || "";
-
       await updateTrade(selectedId, {
         ticker: values.ticker,
         side: values.side,
         quantity: values.quantity,
         entry: values.entry,
         exit: values.exit,
-        account: accountName,
         accountId: values.accountId,
         date: format(values.date, "yyyy-MM-dd"),
         time: values.time,
@@ -230,7 +231,9 @@ function TradeForm({
             name="ticker"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Ticker <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Ticker <span className="text-red-500">*</span>
+                </FormLabel>
                 <FormControl>
                   <Input placeholder="AAPL" {...field} />
                 </FormControl>
@@ -244,7 +247,9 @@ function TradeForm({
             name="side"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Side <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Side <span className="text-red-500">*</span>
+                </FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
@@ -268,7 +273,9 @@ function TradeForm({
             name="quantity"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Quantity <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Quantity <span className="text-red-500">*</span>
+                </FormLabel>
                 <FormControl>
                   <Input type="number" placeholder="100" {...field} />
                 </FormControl>
@@ -282,7 +289,9 @@ function TradeForm({
             name="entry"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Entry <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Entry <span className="text-red-500">*</span>
+                </FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -301,7 +310,9 @@ function TradeForm({
             name="exit"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Exit <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Exit <span className="text-red-500">*</span>
+                </FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -321,7 +332,9 @@ function TradeForm({
           name="accountId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Account <span className="text-red-500">*</span></FormLabel>
+              <FormLabel>
+                Account <span className="text-red-500">*</span>
+              </FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
@@ -347,7 +360,9 @@ function TradeForm({
             name="date"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel>Date <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Date <span className="text-red-500">*</span>
+                </FormLabel>
                 <Popover>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -390,12 +405,11 @@ function TradeForm({
             name="time"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel>Time <span className="text-red-500">*</span></FormLabel>
+                <FormLabel>
+                  Time <span className="text-red-500">*</span>
+                </FormLabel>
                 <FormControl>
-                  <TimePicker
-                    value={field.value}
-                    onChange={field.onChange}
-                  />
+                  <TimePicker value={field.value} onChange={field.onChange} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -411,7 +425,12 @@ function TradeForm({
               <FormItem>
                 <FormLabel>Realized P/L</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.01" placeholder="525.00" {...field} />
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="525.00"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

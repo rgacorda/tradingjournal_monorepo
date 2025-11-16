@@ -59,7 +59,7 @@ export default function MistakeInsights() {
 
     if (recentMistakes.length > 0) {
       insights.push(
-        `You've made ${recentMistakes.length} mistake${
+        `You have made ${recentMistakes.length} mistake${
           recentMistakes.length > 1 ? "s" : ""
         } in the past 7 days: ${recentMistakes
           .map((m) => `"${m.mistakeName}"`)
@@ -150,7 +150,7 @@ export default function MistakeInsights() {
     );
     if (improvingMistakes.length > 0) {
       recommendations.push(
-        `✅ **Good Progress**: You haven't made ${improvingMistakes
+        `✅ **Good Progress**: You have not made ${improvingMistakes
           .map((m) => `"${m.mistakeName}"`)
           .join(", ")} in over 30 days. Keep up the discipline!`
       );
@@ -185,7 +185,7 @@ export default function MistakeInsights() {
           Key Insights & What to Improve
         </CardTitle>
         <CardDescription>
-          Based on your mistake patterns, here's what needs your attention
+          Based on your mistake patterns, here is what needs your attention
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

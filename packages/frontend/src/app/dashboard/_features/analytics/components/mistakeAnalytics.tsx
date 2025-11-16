@@ -26,11 +26,7 @@ import {
   TrendingUp,
   Clock,
   AlertCircle,
-  Lightbulb,
-  Target,
-  AlertTriangle,
 } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function MistakeAnalytics() {
   const { data, error, isLoading } = useSWR<MistakeAnalyticsResponse>(

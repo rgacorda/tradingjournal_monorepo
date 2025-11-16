@@ -83,7 +83,7 @@ export default function Loginss() {
               key={`quote-${currentQuoteIndex}`}
               className="text-4xl font-light text-white leading-relaxed animate-[fadeInUp_0.8s_ease-out]"
             >
-              "{tradingQuotes[currentQuoteIndex].quote}"
+              &ldquo;{tradingQuotes[currentQuoteIndex].quote}&rdquo;
             </p>
             <footer
               key={`author-${currentQuoteIndex}`}

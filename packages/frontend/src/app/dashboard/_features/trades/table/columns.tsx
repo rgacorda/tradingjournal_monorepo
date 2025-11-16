@@ -105,6 +105,36 @@ function MistakeCell({ trade }: { trade: Trade }) {
   );
 }
 
+function ActionsCell({ trade }: { trade: Trade }) {
+  const setEditOpen = useTradeUIStore((s) => s.setEditOpen);
+  const setSelectedTradeId = useTradeUIStore((s) => s.setSelectedTradeId);
+
+  const handleEdit = () => {
+    setSelectedTradeId(trade.id);
+    setEditOpen(true);
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <span className="sr-only">Open menu</span>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+        <DropdownMenuItem onClick={handleEdit}>Edit Trade</DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => navigator.clipboard.writeText(trade.id)}
+        >
+          Copy Trade ID
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export const columns: ColumnDef<Trade>[] = [
   {
     id: "select",
@@ -268,35 +298,6 @@ export const columns: ColumnDef<Trade>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
-      const trade = row.original;
-      const setEditOpen = useTradeUIStore((s) => s.setEditOpen);
-      const setSelectedTradeId = useTradeUIStore((s) => s.setSelectedTradeId);
-
-      const handleEdit = () => {
-        setSelectedTradeId(trade.id);
-        setEditOpen(true);
-      };
-
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem onClick={handleEdit}>Edit Trade</DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(trade.id)}
-            >
-              Copy Trade ID
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
+    cell: ({ row }) => <ActionsCell trade={row.original} />,
   },
 ];

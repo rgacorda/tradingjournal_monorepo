@@ -57,7 +57,7 @@ import {
 import { toast } from "sonner";
 import { mutate } from "swr";
 import { useTradeUIStore } from "@/stores/trade-ui-store";
-import { getTradebyId, updateTrade, Trade } from "@/actions/trades/trades";
+import { getTradebyId, updateTrade } from "@/actions/trades/trades";
 import {
   getMistakes,
   createMistake,
