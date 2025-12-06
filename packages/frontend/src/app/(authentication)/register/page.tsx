@@ -86,7 +86,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        <style jsx>{`
+        <style>{`
           @keyframes fadeInUp {
             from {
               opacity: 0;
