@@ -1,4 +1,4 @@
-// middleware.ts
+// proxy.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
@@ -10,29 +10,31 @@ const PUBLIC_ROUTES = [
   "/verify-email",
 ];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("refreshToken")?.value;
 
-  const isPublic =
-    PUBLIC_ROUTES.includes(pathname);
+  const isPublic = PUBLIC_ROUTES.includes(pathname);
 
-  if (token) {
-    if (pathname === "/login" || pathname === "/register") {
+  // Don't check auth for public routes
+  if (isPublic) {
+    // If already logged in, redirect away from auth pages
+    if (token && (pathname === "/login" || pathname === "/register")) {
       return NextResponse.redirect(new URL("/dashboard/main", req.url));
     }
     return NextResponse.next();
-  } else {
-    if (isPublic) {
-      return NextResponse.next();
-    }
+  }
 
+  // For protected routes, check if token exists
+  if (!token) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("expired", "1");
     return NextResponse.redirect(loginUrl);
   }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next|favicon.ico|api).*)"],
+  matcher: ["/((?!_next|favicon.ico|api|.*\\..*).*)"],
 };

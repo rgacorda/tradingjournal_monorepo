@@ -60,36 +60,33 @@ export function LoginForm({
   // };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-  try {
-    const response = await Login(values);
+    try {
+      const response = await Login(values);
 
-    // Auto-detect timezone if not set
-    let userTimezone = response.user.timezone;
-    if (!userTimezone) {
-      userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      // Auto-detect timezone if not set
+      let userTimezone = response.user.timezone;
+      if (!userTimezone) {
+        userTimezone =
+          Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      }
+
+      useUserStore.getState().setUser({
+        ...response.user,
+        timezone: userTimezone,
+      });
+      toast.success("Logged in successfully");
+      router.push("/dashboard/main");
+    } catch (err: unknown) {
+      let message = (err as Error).message || "Login Failed";
+
+      if (typeof err === "object" && err !== null && "isAxiosError" in err) {
+        const axiosErr = err as AxiosError<{ message?: string }>;
+        message = axiosErr.response?.data?.message || message;
+      }
+
+      toast.error(message);
     }
-
-    useUserStore.getState().setUser({
-      ...response.user,
-      timezone: userTimezone
-    });
-    toast.success("Logged in successfully");
-    router.push("/dashboard/main");
-  } catch (err: unknown) {
-    let message = (err as Error).message ||  "Login Failed";
-
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "isAxiosError" in err
-    ) {
-      const axiosErr = err as AxiosError<{ message?: string }>;
-      message = axiosErr.response?.data?.message || message;
-    }
-
-    toast.error(message);
-  }
-};
+  };
 
   return (
     <Form {...form}>
@@ -120,52 +117,52 @@ export function LoginForm({
               )}
             />
           </div>
-            <div className="grid gap-2">
+          <div className="grid gap-2">
             <div className="flex items-center">
               <Label htmlFor="password">Password</Label>
               <Link
-              href="/forgot-password"
-              className="ml-auto text-sm underline-offset-4 hover:underline"
+                href="/forgot-password"
+                className="ml-auto text-sm underline-offset-4 hover:underline"
               >
-              Forgot your password?
+                Forgot your password?
               </Link>
             </div>
             <FormField
               control={form.control}
               name="password"
               render={({ field }) => {
-              return (
-                <FormItem>
-                <FormControl>
-                  <div className="relative">
-                  <Input
-                    placeholder="password"
-                    type={show ? "text" : "password"}
-                    {...field}
-                  />
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
-                    onClick={() => setShow((s) => !s)}
-                  >
-                    {show ? "Hide" : "Show"}
-                  </button>
-                  </div>
-                </FormControl>
-                <FormMessage />
-                </FormItem>
-              );
+                return (
+                  <FormItem>
+                    <FormControl>
+                      <div className="relative">
+                        <Input
+                          placeholder="password"
+                          type={show ? "text" : "password"}
+                          {...field}
+                        />
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground"
+                          onClick={() => setShow((s) => !s)}
+                        >
+                          {show ? "Hide" : "Show"}
+                        </button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                );
               }}
             />
-            </div>
-            <Button
+          </div>
+          <Button
             type="submit"
             className="w-full"
             disabled={form.formState.isSubmitting}
-            >
+          >
             {form.formState.isSubmitting ? "Loading..." : "Login"}
-            </Button>
+          </Button>
           {/* <div className="relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t after:border-border">
             <span className="relative z-10 bg-background px-2 text-muted-foreground">
               Or continue with
