@@ -10,7 +10,7 @@ const PUBLIC_ROUTES = [
   "/verify-email",
 ];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("refreshToken")?.value;
 
