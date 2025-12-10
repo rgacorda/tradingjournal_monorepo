@@ -75,14 +75,16 @@ const About = () => {
   return (
     <section
       id="about"
-      className="container mx-auto flex flex-col items-center space-y-16 py-8 px-4 md:py-12 lg:py-24 bg-gradient-to-b from-white to-slate-50"
+      className="container mx-auto flex flex-col items-center space-y-16 py-8 px-4 md:py-12 lg:py-24 bg-gradient-to-b from-background to-muted/50"
     >
       {/* Hero Section */}
       <div className="mx-auto flex max-w-[980px] flex-col items-center gap-4 text-center">
-        <div className="inline-block px-4 py-2 rounded-full bg-black/5 border border-black/10 mb-2">
-          <span className="text-sm font-semibold text-black">OUR STORY</span>
+        <div className="inline-block px-4 py-2 rounded-full bg-muted border border-border mb-2">
+          <span className="text-sm font-semibold text-foreground">
+            OUR STORY
+          </span>
         </div>
-        <h1 className="text-3xl font-bold leading-tight tracking-tighter md:text-6xl lg:leading-[1.1] text-black">
+        <h1 className="text-3xl font-bold leading-tight tracking-tighter md:text-6xl lg:leading-[1.1] text-foreground">
           About Trade2Learn
         </h1>
         <p className="max-w-[750px] text-lg text-muted-foreground sm:text-xl">
@@ -142,11 +144,11 @@ const About = () => {
 
         <div className="mx-auto max-w-[800px] space-y-6 text-muted-foreground">
           <p className="text-lg leading-relaxed">
-            Hi, I&apos;m the founder of Trade2Learn. Like many traders, I started my
-            journey with basic tools and spreadsheets, constantly frustrated by
-            the lack of proper analytics and insights. After years of manual
-            tracking and analysis, I realized that the tools available just
-            weren&apos;t cutting it.
+            Hi, I&apos;m the founder of Trade2Learn. Like many traders, I
+            started my journey with basic tools and spreadsheets, constantly
+            frustrated by the lack of proper analytics and insights. After years
+            of manual tracking and analysis, I realized that the tools available
+            just weren&apos;t cutting it.
           </p>
           <p className="text-lg leading-relaxed">
             As a software developer with a passion for trading, I decided to
@@ -156,9 +158,9 @@ const About = () => {
           </p>
           <p className="text-lg leading-relaxed">
             Currently in development, Trade2Learn is my attempt to solve the
-            problems I faced as a trader. While we don&apos;t have customers yet, I&apos;m
-            working hard to create something that will genuinely help traders
-            succeed in the markets.
+            problems I faced as a trader. While we don&apos;t have customers
+            yet, I&apos;m working hard to create something that will genuinely
+            help traders succeed in the markets.
           </p>
         </div>
       </div>
@@ -317,16 +319,22 @@ const About = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-muted-foreground">
-              I&apos;m putting the finishing touches on the platform and would love
-              to hear from traders who are interested in being early users. Your
-              feedback will help shape the final product.
+              I&apos;m putting the finishing touches on the platform and would
+              love to hear from traders who are interested in being early users.
+              Your feedback will help shape the final product.
             </p>
             <div className="flex flex-col gap-4 sm:flex-row sm:justify-center">
-              <Link href={"/register"} className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-6 py-3 text-white hover:bg-gray-800 transition-colors duration-200" >
+              <Link
+                href={"/register"}
+                className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-6 py-3 text-white hover:bg-gray-800 transition-colors duration-200"
+              >
                 Join the Demo
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
-              <Link href={"#"} className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors duration-200" >
+              <Link
+                href={"#"}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-300 px-6 py-3 text-gray-700 hover:bg-gray-100 transition-colors duration-200"
+              >
                 Provide Feedback (Coming Soon)
               </Link>
             </div>
