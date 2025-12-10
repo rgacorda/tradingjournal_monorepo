@@ -109,7 +109,7 @@ export default function Loginss() {
           </div>
         </div>
 
-        <style>{`
+        <style jsx>{`
           @keyframes fadeInUp {
             from {
               opacity: 0;
