@@ -14,8 +14,7 @@ export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("refreshToken")?.value;
 
-  const isPublic =
-    PUBLIC_ROUTES.includes(pathname);
+  const isPublic = PUBLIC_ROUTES.includes(pathname);
 
   if (token) {
     if (pathname === "/login" || pathname === "/register") {
@@ -34,5 +33,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next|favicon.ico|api).*)"],
+  matcher: ["/((?!_next|favicon.ico|api|images|assets).*)"],
 };
