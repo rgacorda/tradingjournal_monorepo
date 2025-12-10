@@ -63,7 +63,7 @@ const Testimonials = () => {
 
               <div className="flex items-center">
                 <Image
-                  src="/assets/SS1.png"
+                  src="/images/landing/SS1.png"
                   alt={testimonial.name}
                   className="w-12 h-12 rounded-full mr-4 object-cover"
                   width={48}

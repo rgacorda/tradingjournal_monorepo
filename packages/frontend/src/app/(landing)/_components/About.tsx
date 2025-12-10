@@ -187,7 +187,7 @@ const About = () => {
             <CardContent>
               <div className="aspect-video rounded-lg border bg-muted overflow-hidden mb-4">
                 <img 
-                  src="/src/assets/SS1.png" 
+                  src="/images/landing/SS1.png" 
                   alt="Trade2Learn Dashboard"
                   className="w-full h-full object-cover"
                 />
@@ -208,7 +208,7 @@ const About = () => {
             <CardContent>
               <div className="aspect-video rounded-lg border bg-muted overflow-hidden mb-4">
                 <img 
-                  src="/assets/SS1.png" 
+                  src="/images/landing/SS1.png" 
                   alt="Trade2Learn Analytics"
                   className="w-full h-full object-cover"
                 />
