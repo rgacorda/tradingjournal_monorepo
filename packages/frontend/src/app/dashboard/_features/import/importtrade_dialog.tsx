@@ -90,7 +90,7 @@ export function ImportTrade({ open, onOpenChange }: DialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-card">
         <DialogHeader>
           <DialogTitle>Import Trades</DialogTitle>
           <DialogDescription>

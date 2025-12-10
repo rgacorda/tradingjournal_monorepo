@@ -50,19 +50,42 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
   const startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
   const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 });
 
-
-
   // Helper to get adjusted realized based on commission setting
-  const getAdjustedRealized = React.useCallback((trade: Trade) => {
-    if (!accounts) return Number(trade.realized);
+  const getAdjustedRealized = React.useCallback(
+    (trade: Trade) => {
+      if (!accounts) return Number(trade.realized);
 
-    const account = accounts.find(acc => acc.id === trade.accountId);
-    const isCommissionsIncluded = account?.isCommissionsIncluded || false;
-    const realized = Number(trade.realized);
-    const fees = Number(trade.fees) || 0;
+      const account = accounts.find((acc) => acc.id === trade.accountId);
+      const isCommissionsIncluded = account?.isCommissionsIncluded || false;
+      const realized = Number(trade.realized);
+      const fees = Number(trade.fees) || 0;
 
-    return isCommissionsIncluded ? realized - fees : realized;
-  }, [accounts]);
+      return isCommissionsIncluded ? realized - fees : realized;
+    },
+    [accounts]
+  );
+
+  // Calculate monthly totals
+  const monthlyTotals = React.useMemo(() => {
+    if (!trades || !accounts) return { totalPnL: 0, totalTrades: 0 };
+
+    const monthTrades = trades.filter((trade) => {
+      const tradeDate = parseDateOnly(trade.date);
+      return (
+        tradeDate.getFullYear() === currentMonth.getFullYear() &&
+        tradeDate.getMonth() === currentMonth.getMonth()
+      );
+    });
+
+    const totalPnL = monthTrades.reduce((sum, trade) => {
+      return sum + getAdjustedRealized(trade);
+    }, 0);
+
+    return {
+      totalPnL,
+      totalTrades: monthTrades.length,
+    };
+  }, [trades, currentMonth, accounts, getAdjustedRealized]);
 
   // Group trades by date and summarize, but only for current month
   const events = React.useMemo(() => {
@@ -103,7 +126,6 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
   let day = startDate;
 
   while (day <= endDate) {
-
     for (let i = 0; i < 7; i++) {
       const isCurrentMonth = isSameMonth(day, monthStart);
       const isToday = isSameDay(day, new Date());
@@ -119,11 +141,11 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
       const cellBg =
         realizedAmount !== null
           ? realizedAmount >= 0
-            ? "bg-green-50 text-green-900"
-            : "bg-red-50 text-red-900"
+            ? "bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100"
+            : "bg-red-50 dark:bg-red-950 text-red-900 dark:text-red-100"
           : isCurrentMonth
-          ? "bg-white"
-          : "bg-gray-100 text-gray-400";
+          ? "bg-card"
+          : "bg-muted/50 text-muted-foreground";
 
       days.push(
         <div
@@ -134,7 +156,7 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
           `}
         >
           {/* Top: Day number */}
-          <div className="text-[11px] font-bold text-gray-700">
+          <div className="text-[11px] font-bold text-foreground">
             {format(day, "d")}
           </div>
 
@@ -147,8 +169,8 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
                   text-[11px] font-medium text-center px-2 py-[2px] rounded-md 
                   ${
                     realizedAmount! >= 0
-                      ? "bg-green-200 text-green-900"
-                      : "bg-red-200 text-red-900"
+                      ? "bg-green-200 dark:bg-green-900 text-green-900 dark:text-green-100"
+                      : "bg-red-200 dark:bg-red-900 text-red-900 dark:text-red-100"
                   }
                 `}
               >
@@ -176,7 +198,18 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
         <div className="flex items-center justify-between w-full space-y-1.5">
           <div>
             <CardTitle>Month Calendar</CardTitle>
-            <CardDescription>Daily Trades and PnL View</CardDescription>
+            <CardDescription>
+              Daily Trades and PnL View • {monthlyTotals.totalTrades} trades •
+              <span
+                className={
+                  monthlyTotals.totalPnL >= 0
+                    ? "text-green-600 dark:text-green-400"
+                    : "text-red-600 dark:text-red-400"
+                }
+              >
+                ${monthlyTotals.totalPnL.toFixed(2)}
+              </span>
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2 w-auto">
             {/* Month Select */}
@@ -229,9 +262,9 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
         <div className="overflow-x-auto">
           {/* Weekdays */}
           <div className="min-w-[1000px] w-fit mx-auto">
-            <div className="grid grid-cols-7 bg-gray-200 text-center text-xs font-semibold rounded-t-md overflow-hidden">
+            <div className="grid grid-cols-7 bg-muted text-center text-xs font-semibold rounded-t-md overflow-hidden">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-                <div key={d} className="py-2 border">
+                <div key={d} className="py-2 border border-border">
                   {d}
                 </div>
               ))}
