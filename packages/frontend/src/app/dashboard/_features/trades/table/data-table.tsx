@@ -68,6 +68,8 @@ export function DataTable<TData, TValue>({
   const setFilter = useTradeUIStore((s) => s.setFilter);
   const addOpen = useTradeUIStore((s) => s.addOpen);
   const setAddOpen = useTradeUIStore((s) => s.setAddOpen);
+  const limitFilter = useTradeUIStore((s) => s.limitFilter);
+  const setLimitFilter = useTradeUIStore((s) => s.setLimitFilter);
 
   return (
     <>
@@ -105,11 +107,33 @@ export function DataTable<TData, TValue>({
             </SelectContent>
           </Select>
 
+          <Select
+            value={limitFilter?.toString()}
+            onValueChange={(value) =>
+              setLimitFilter(value ? Number(value) : undefined)
+            }
+          >
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="All Trades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Limit</SelectLabel>
+                <SelectItem value="20">Last 20</SelectItem>
+                <SelectItem value="50">Last 50</SelectItem>
+                <SelectItem value="100">Last 100</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
           <Button
             variant="outline"
-            onClick={() => setFilter(undefined)}
+            onClick={() => {
+              setFilter(undefined);
+              setLimitFilter(undefined);
+            }}
           >
-            Clear Filter
+            Clear All Filters
           </Button>
         </div>
 
@@ -121,7 +145,7 @@ export function DataTable<TData, TValue>({
             onClick={async () => {
               const selectedRows = table.getSelectedRowModel().rows;
               const selectedIds = selectedRows.map(
-                (row) => (row.original as { id: string }).id
+                (row) => (row.original as { id: string }).id,
               );
               try {
                 await deleteTrades(selectedIds);
@@ -130,7 +154,8 @@ export function DataTable<TData, TValue>({
                 toast.success("Trades deleted successfully.");
               } catch (error) {
                 const axiosError = error as AxiosError;
-                const message = axiosError.message || "Failed to delete trades.";
+                const message =
+                  axiosError.message || "Failed to delete trades.";
                 toast.error(message);
               }
             }}
@@ -152,7 +177,7 @@ export function DataTable<TData, TValue>({
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
-                            header.getContext()
+                            header.getContext(),
                           )}
                     </TableHead>
                   );
@@ -171,7 +196,7 @@ export function DataTable<TData, TValue>({
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext()
+                        cell.getContext(),
                       )}
                     </TableCell>
                   ))}

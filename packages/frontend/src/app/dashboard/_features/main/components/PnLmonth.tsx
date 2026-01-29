@@ -18,6 +18,8 @@ import {
   endOfWeek,
   isSameMonth,
   isSameDay,
+  addMonths,
+  subMonths,
 } from "date-fns";
 import React, { useState } from "react";
 import { parseDateOnly } from "@/lib/utils";
@@ -30,6 +32,8 @@ import {
 } from "@/components/ui/select";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export type Event = {
   id: string;
@@ -50,6 +54,15 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
   const startDate = startOfWeek(monthStart, { weekStartsOn: 0 });
   const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 });
 
+  // Navigation handlers
+  const handlePreviousMonth = () => {
+    setCurrentMonth(subMonths(currentMonth, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentMonth(addMonths(currentMonth, 1));
+  };
+
   // Helper to get adjusted realized based on commission setting
   const getAdjustedRealized = React.useCallback(
     (trade: Trade) => {
@@ -62,7 +75,7 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
 
       return isCommissionsIncluded ? realized - fees : realized;
     },
-    [accounts]
+    [accounts],
   );
 
   // Calculate monthly totals
@@ -144,8 +157,8 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
             ? "bg-green-50 dark:bg-green-950 text-green-900 dark:text-green-100"
             : "bg-red-50 dark:bg-red-950 text-red-900 dark:text-red-100"
           : isCurrentMonth
-          ? "bg-card"
-          : "bg-muted/50 text-muted-foreground";
+            ? "bg-card"
+            : "bg-muted/50 text-muted-foreground";
 
       days.push(
         <div
@@ -178,7 +191,7 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
       );
 
       day = addDays(day, 1);
@@ -187,7 +200,7 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
     rows.push(
       <div key={day.toString()} className="grid grid-cols-7 gap-1">
         {days}
-      </div>
+      </div>,
     );
     days = [];
   }
@@ -212,12 +225,22 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 w-auto">
+            {/* Previous Month Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handlePreviousMonth}
+              className="h-9 w-9"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
             {/* Month Select */}
             <Select
               value={String(currentMonth.getMonth())}
               onValueChange={(month) => {
                 setCurrentMonth(
-                  new Date(currentMonth.getFullYear(), Number(month), 1)
+                  new Date(currentMonth.getFullYear(), Number(month), 1),
                 );
               }}
             >
@@ -237,7 +260,7 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
               value={String(currentMonth.getFullYear())}
               onValueChange={(year) => {
                 setCurrentMonth(
-                  new Date(Number(year), currentMonth.getMonth(), 1)
+                  new Date(Number(year), currentMonth.getMonth(), 1),
                 );
               }}
             >
@@ -255,6 +278,16 @@ export const MonthCalendar: React.FC<Props> = ({ trades }) => {
                 })}
               </SelectContent>
             </Select>
+
+            {/* Next Month Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleNextMonth}
+              className="h-9 w-9"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </CardHeader>

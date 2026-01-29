@@ -7,6 +7,7 @@ type TradeUIState = {
   deleteOpen: boolean;
   selectedTradeId: string | null;
   filter: string | undefined;
+  limitFilter: number | undefined;
 
   setAddOpen: (open: boolean) => void;
   setEditOpen: (open: boolean) => void;
@@ -14,6 +15,7 @@ type TradeUIState = {
   setDeleteOpen: (open: boolean) => void;
   setSelectedTradeId: (id: string | null) => void;
   setFilter: (filter: string | undefined) => void;
+  setLimitFilter: (limit: number | undefined) => void;
 };
 
 export const useTradeUIStore = create<TradeUIState>((set) => ({
@@ -23,6 +25,7 @@ export const useTradeUIStore = create<TradeUIState>((set) => ({
   deleteOpen: false,
   selectedTradeId: null,
   filter: undefined,
+  limitFilter: undefined,
 
   setAddOpen: (open) => set({ addOpen: open }),
   setEditOpen: (open) => set({ editOpen: open }),
@@ -30,4 +33,5 @@ export const useTradeUIStore = create<TradeUIState>((set) => ({
   setDeleteOpen: (open) => set({ deleteOpen: open }),
   setSelectedTradeId: (id) => set({ selectedTradeId: id }),
   setFilter: (filter) => set({ filter }),
+  setLimitFilter: (limit) => set({ limitFilter: limit }),
 }));

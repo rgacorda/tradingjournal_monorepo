@@ -199,7 +199,7 @@ exports.getMistakeAnalytics = async (req, res) => {
 
         if (trades.length > 0) {
           const sortedTrades = trades.sort(
-            (a, b) => new Date(b.date) - new Date(a.date)
+            (a, b) => new Date(b.date) - new Date(a.date),
           );
           lastOccurrence = sortedTrades[0].date;
 
@@ -209,7 +209,7 @@ exports.getMistakeAnalytics = async (req, res) => {
           daysSinceLastOccurrence = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         }
 
-        // Grade Impact Analysis
+        // Grade Analysis
         const tradesWithGrades = trades.filter((t) => t.grade !== null);
         const averageGrade =
           tradesWithGrades.length > 0
@@ -236,11 +236,6 @@ exports.getMistakeAnalytics = async (req, res) => {
               ).toFixed(2)
             : null;
 
-        const gradeImpact =
-          averageGrade && overallAverageGrade
-            ? (averageGrade - overallAverageGrade).toFixed(2)
-            : null;
-
         // Financial Impact
         const totalPnL = trades
           .reduce((sum, t) => sum + parseFloat(t.realized || 0), 0)
@@ -264,7 +259,6 @@ exports.getMistakeAnalytics = async (req, res) => {
             overallAverageGrade: overallAverageGrade
               ? parseFloat(overallAverageGrade)
               : null,
-            gradeImpact: gradeImpact ? parseFloat(gradeImpact) : null,
             tradesWithGrades: tradesWithGrades.length,
           },
           financialImpact: {
@@ -272,7 +266,7 @@ exports.getMistakeAnalytics = async (req, res) => {
             averagePnL: parseFloat(averagePnL),
           },
         };
-      })
+      }),
     );
 
     // Sort by frequency (most common mistakes first)

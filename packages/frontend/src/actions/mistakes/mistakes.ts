@@ -23,7 +23,6 @@ export type MistakeAnalytics = {
   gradeAnalysis: {
     averageGrade: number | null;
     overallAverageGrade: number | null;
-    gradeImpact: number | null;
     tradesWithGrades: number;
   };
   financialImpact: {
@@ -47,7 +46,7 @@ const handleAxiosError = (error: unknown, fallbackMessage: string): never => {
     const axiosError = error as AxiosError<{ message?: string }>;
     console.error(
       fallbackMessage,
-      axiosError.response?.data || axiosError.message
+      axiosError.response?.data || axiosError.message,
     );
     throw new Error(axiosError.response?.data?.message || fallbackMessage);
   }

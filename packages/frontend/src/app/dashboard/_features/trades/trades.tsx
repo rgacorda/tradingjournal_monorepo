@@ -15,23 +15,36 @@ export default function TradeDashboard() {
   const { data: accounts } = useSWR("/account/", fetcher);
   const filter = useTradeUIStore((s) => s.filter);
   const setFilter = useTradeUIStore((s) => s.setFilter);
+  const limitFilter = useTradeUIStore((s) => s.limitFilter);
+  const setLimitFilter = useTradeUIStore((s) => s.setLimitFilter);
 
   if (error) toast.error("Failed to load trades");
 
   useEffect(() => {
     setFilter(undefined);
-  }, [setFilter]);
+    setLimitFilter(undefined);
+  }, [setFilter, setLimitFilter]);
 
   const filteredTrades = React.useMemo(() => {
     if (!trades) return [];
-    if (!filter) return trades;
-    return trades.filter(
-      (trade) =>
-        trade.side === filter ||
-        trade.planId === filter ||
-        trade.accountId === filter
-    );
-  }, [trades, filter]);
+
+    // Apply account/plan/side filter
+    let filtered = filter
+      ? trades.filter(
+          (trade) =>
+            trade.side === filter ||
+            trade.planId === filter ||
+            trade.accountId === filter,
+        )
+      : trades;
+
+    // Apply limit filter (last N trades)
+    if (limitFilter) {
+      filtered = filtered.slice(0, limitFilter);
+    }
+
+    return filtered;
+  }, [trades, filter, limitFilter]);
 
   const stats = React.useMemo(() => {
     const all = filteredTrades;
@@ -47,7 +60,10 @@ export default function TradeDashboard() {
 
     // Create a map of accountId -> isCommissionsIncluded
     const accountCommissionMap = new Map(
-      accounts.map((acc: { id: string; isCommissionsIncluded?: boolean }) => [acc.id, acc.isCommissionsIncluded])
+      accounts.map((acc: { id: string; isCommissionsIncluded?: boolean }) => [
+        acc.id,
+        acc.isCommissionsIncluded,
+      ]),
     );
 
     // Helper function to get adjusted realized value
@@ -74,7 +90,7 @@ export default function TradeDashboard() {
 
     const pnlratio = avgWin / (avgLoss || 1);
 
-    const expectancy = (winRate * avgWin) - ((1 - winRate) * avgLoss);
+    const expectancy = winRate * avgWin - (1 - winRate) * avgLoss;
 
     const gradeValues = all
       .map((t) => Number(t.grade))

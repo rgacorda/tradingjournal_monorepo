@@ -33,7 +33,7 @@ export function ImportTrade({ open, onOpenChange }: DialogProps) {
   const [platform, setPlatform] = useState<string>("");
   const [account, setAccount] = useState<string>("");
   // const [openCalendar, setOpenCalendar] = useState(false)
-  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [date, setDate] = useState<Date | undefined>(new Date());
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
