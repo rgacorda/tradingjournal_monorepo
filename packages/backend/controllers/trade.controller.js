@@ -25,7 +25,7 @@ exports.getAllTrades = async (req, res) => {
       ],
     });
     const sortedTrades = trades.sort(
-      (a, b) => new Date(b.date) - new Date(a.date)
+      (a, b) => new Date(b.date) - new Date(a.date),
     );
     res.status(200).json(sortedTrades);
   } catch (err) {
@@ -175,6 +175,7 @@ exports.updateTrade = async (req, res) => {
     notes,
     security,
     broker,
+    isVisibleInAnalytics,
   } = req.body;
 
   const updateData = {};
@@ -195,6 +196,8 @@ exports.updateTrade = async (req, res) => {
   if (notes !== undefined) updateData.notes = notes;
   if (security !== undefined) updateData.security = security;
   if (broker !== undefined) updateData.broker = broker;
+  if (isVisibleInAnalytics !== undefined)
+    updateData.isVisibleInAnalytics = isVisibleInAnalytics;
 
   try {
     const trade = await Trade.findByPk(id);

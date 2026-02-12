@@ -22,11 +22,15 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Clock, AlertCircle, TrendingDown, TrendingUp } from "lucide-react";
+import { useAnalyticsUIStore } from "@/stores/analytics-ui-store";
 
 export default function MistakeAnalytics() {
+  const limitFilter = useAnalyticsUIStore((s) => s.limitFilter);
+
+  // Include limit in the SWR key so it refetches when limit changes
   const { data, error, isLoading } = useSWR<MistakeAnalyticsResponse>(
-    "/mistake/analytics",
-    getMistakeAnalytics,
+    limitFilter ? `/mistake/analytics-${limitFilter}` : "/mistake/analytics",
+    () => getMistakeAnalytics(limitFilter),
   );
 
   if (isLoading) {

@@ -13,6 +13,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectTrigger,
@@ -48,7 +49,7 @@ function PlanSelectCell({ trade }: { trade: Trade }) {
         } catch (error) {
           const axiosError = error as AxiosError<{ message?: string }>;
           toast.error(
-            axiosError.response?.data?.message || "Failed to update trade."
+            axiosError.response?.data?.message || "Failed to update trade.",
           );
         }
       }}
@@ -102,6 +103,53 @@ function MistakeCell({ trade }: { trade: Trade }) {
     <Badge variant="outline" className="text-xs" onClick={handleClick}>
       No mistakes
     </Badge>
+  );
+}
+
+function AnalyticsToggleCell({ trade }: { trade: Trade }) {
+  const [isVisible, setIsVisible] = React.useState(
+    trade.isVisibleInAnalytics !== false,
+  );
+  const [isUpdating, setIsUpdating] = React.useState(false);
+
+  // Update local state when trade prop changes
+  React.useEffect(() => {
+    setIsVisible(trade.isVisibleInAnalytics !== false);
+  }, [trade.isVisibleInAnalytics]);
+
+  return (
+    <div className="flex justify-center">
+      <Switch
+        checked={isVisible}
+        disabled={isUpdating}
+        onCheckedChange={async (checked) => {
+          setIsUpdating(true);
+          setIsVisible(checked); // Optimistic update
+          try {
+            await updateTrade(trade.id, {
+              ...trade,
+              isVisibleInAnalytics: checked,
+            });
+            mutate("/trade/");
+            toast.success(
+              checked
+                ? "Trade visible in analytics"
+                : "Trade hidden from analytics",
+            );
+          } catch (error) {
+            // Revert on error
+            setIsVisible(!checked);
+            const axiosError = error as AxiosError<{ message?: string }>;
+            toast.error(
+              axiosError.response?.data?.message ||
+                "Failed to update visibility.",
+            );
+          } finally {
+            setIsUpdating(false);
+          }
+        }}
+      />
+    </div>
   );
 }
 
@@ -240,7 +288,7 @@ export const columns: ColumnDef<Trade>[] = [
             } catch (error) {
               const axiosError = error as AxiosError<{ message?: string }>;
               toast.error(
-                axiosError.response?.data?.message || "Failed to update grade."
+                axiosError.response?.data?.message || "Failed to update grade.",
               );
             }
           }
@@ -273,7 +321,7 @@ export const columns: ColumnDef<Trade>[] = [
             } catch (error) {
               const axiosError = error as AxiosError<{ message?: string }>;
               toast.error(
-                axiosError.response?.data?.message || "Failed to update fees."
+                axiosError.response?.data?.message || "Failed to update fees.",
               );
             }
           }
@@ -295,6 +343,11 @@ export const columns: ColumnDef<Trade>[] = [
         <div className={`${color} text-right font-medium`}>{formatted}</div>
       );
     },
+  },
+  {
+    accessorKey: "isVisibleInAnalytics",
+    header: () => <div className="text-center">Analytics</div>,
+    cell: ({ row }) => <AnalyticsToggleCell trade={row.original} />,
   },
   {
     id: "actions",

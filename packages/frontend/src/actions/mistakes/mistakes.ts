@@ -107,12 +107,16 @@ export const deleteMistakes = async (ids: string[] | null) => {
   }
 };
 
-export const getMistakeAnalytics =
-  async (): Promise<MistakeAnalyticsResponse> => {
-    try {
-      const res = await api.get("/mistake/analytics/data");
-      return res.data;
-    } catch (error: unknown) {
-      return handleAxiosError(error, "Get mistake analytics failed");
-    }
-  };
+export const getMistakeAnalytics = async (
+  limit?: number,
+): Promise<MistakeAnalyticsResponse> => {
+  try {
+    const url = limit
+      ? `/mistake/analytics/data?limit=${limit}`
+      : "/mistake/analytics/data";
+    const res = await api.get(url);
+    return res.data;
+  } catch (error: unknown) {
+    return handleAxiosError(error, "Get mistake analytics failed");
+  }
+};

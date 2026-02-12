@@ -2,6 +2,7 @@ import { Trade } from "@/actions/trades/trades";
 import { fetcher } from "@/lib/fetcher";
 import useSWR from "swr";
 import { useMemo } from "react";
+import { useAnalyticsUIStore } from "@/stores/analytics-ui-store";
 
 type StatItem = {
   label: string;
@@ -12,7 +13,7 @@ type StatItem = {
 
 function calculateStats(
   trades: Trade[] | undefined,
-  accounts: { id: string; isCommissionsIncluded?: boolean }[] | undefined
+  accounts: { id: string; isCommissionsIncluded?: boolean }[] | undefined,
 ): {
   left: StatItem[];
   right: StatItem[];
@@ -23,7 +24,7 @@ function calculateStats(
 
   // Create a map of accountId -> isCommissionsIncluded
   const accountCommissionMap = new Map(
-    accounts.map((acc) => [acc.id, acc.isCommissionsIncluded])
+    accounts.map((acc) => [acc.id, acc.isCommissionsIncluded]),
   );
 
   // Helper function to get adjusted realized value
@@ -43,13 +44,13 @@ function calculateStats(
   const averageDaily = totalGainLoss / tradeDates.length;
   const stdDev = Math.sqrt(
     realized.reduce((sum, r) => sum + Math.pow(r - averageTrade, 2), 0) /
-      (trades.length - 1 || 1)
+      (trades.length - 1 || 1),
   );
   // const scratchTrades = trades.filter((t) => getAdjustedRealized(t) === 0);
   const largestGain = Math.max(...realized);
   const largestLoss = Math.min(...realized);
   const perShare = trades.map((t) =>
-    t.quantity ? getAdjustedRealized(t) / t.quantity : 0
+    t.quantity ? getAdjustedRealized(t) / t.quantity : 0,
   );
   const perShareAvg = perShare.reduce((a, b) => a + b, 0) / trades.length;
 
@@ -61,7 +62,8 @@ function calculateStats(
       : 0;
   const lossAvg =
     losses.length > 0
-      ? losses.reduce((sum, t) => sum + getAdjustedRealized(t), 0) / losses.length
+      ? losses.reduce((sum, t) => sum + getAdjustedRealized(t), 0) /
+        losses.length
       : 0;
   const winRate = (wins.length / trades.length) * 100;
 
@@ -93,7 +95,7 @@ function calculateStats(
 
   const totalCommissions = trades.reduce(
     (sum, t) => sum + Number(t.fees || 0),
-    0
+    0,
   );
 
   const sqn =
@@ -109,7 +111,7 @@ function calculateStats(
       : KwinRate - (1 - KwinRate) * (avgLoss / avgWin);
 
   // Calculate expectancy: (Win Rate × Average Win) - (Loss Rate × Average Loss)
-  const expectancy = (KwinRate * avgWin) - ((1 - KwinRate) * avgLoss);
+  const expectancy = KwinRate * avgWin - (1 - KwinRate) * avgLoss;
 
   return {
     left: [
@@ -165,15 +167,33 @@ function calculateStats(
 
 export default function StatTable() {
   const {
-    data: trades,
+    data: allTrades,
     // error,
     isLoading,
   } = useSWR<Trade[]>("/trade/", fetcher);
   const { data: accounts } = useSWR("/account/", fetcher);
+  const limitFilter = useAnalyticsUIStore((s) => s.limitFilter);
+
+  // Apply visibility and limit filter to trades
+  const trades = useMemo(() => {
+    if (!allTrades) return undefined;
+
+    // First filter by visibility (default to true if undefined)
+    let filteredTrades = allTrades.filter(
+      (trade) => trade.isVisibleInAnalytics !== false,
+    );
+
+    // Then apply limit filter
+    if (limitFilter) {
+      filteredTrades = filteredTrades.slice(0, limitFilter);
+    }
+
+    return filteredTrades;
+  }, [allTrades, limitFilter]);
 
   const { left, right } = useMemo(
     () => calculateStats(trades, accounts),
-    [trades, accounts]
+    [trades, accounts],
   );
 
   if (isLoading) {

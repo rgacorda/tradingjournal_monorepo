@@ -47,7 +47,10 @@ export default function TradeDashboard() {
   }, [trades, filter, limitFilter]);
 
   const stats = React.useMemo(() => {
-    const all = filteredTrades;
+    // Only include visible trades in statistics
+    const all = filteredTrades.filter(
+      (trade) => trade.isVisibleInAnalytics !== false,
+    );
     if (!all || all.length === 0 || !accounts) {
       return {
         expectancy: 0,

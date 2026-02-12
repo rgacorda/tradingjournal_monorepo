@@ -11,24 +11,33 @@ import { columns } from "./table/columns";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function MainDashboard() {
-  const { data: trades } = useSWR<Trade[]>("/trade/", fetcher);
+  const { data: allTrades } = useSWR<Trade[]>("/trade/", fetcher);
   const { data: accounts } = useSWR<Account[]>("/account/", fetcher);
 
+  // Filter trades to only include those visible in analytics
+  const trades = React.useMemo(() => {
+    if (!allTrades) return undefined;
+    return allTrades.filter((trade) => trade.isVisibleInAnalytics !== false);
+  }, [allTrades]);
+
   // Helper function to get adjusted realized value
-  const getAdjustedRealized = React.useCallback((trade: Trade) => {
-    if (!accounts) return Number(trade.realized);
+  const getAdjustedRealized = React.useCallback(
+    (trade: Trade) => {
+      if (!accounts) return Number(trade.realized);
 
-    const account = accounts.find(acc => acc.id === trade.accountId);
-    const isCommissionsIncluded = account?.isCommissionsIncluded || false;
-    const realized = Number(trade.realized);
-    const fees = Number(trade.fees) || 0;
+      const account = accounts.find((acc) => acc.id === trade.accountId);
+      const isCommissionsIncluded = account?.isCommissionsIncluded || false;
+      const realized = Number(trade.realized);
+      const fees = Number(trade.fees) || 0;
 
-    return isCommissionsIncluded ? realized - fees : realized;
-  }, [accounts]);
+      return isCommissionsIncluded ? realized - fees : realized;
+    },
+    [accounts],
+  );
 
   // Overall Revenue (all time)
-  const totalRevenue = trades
-    ?.reduce((acc, trade) => acc + getAdjustedRealized(trade), 0) ?? 0;
+  const totalRevenue =
+    trades?.reduce((acc, trade) => acc + getAdjustedRealized(trade), 0) ?? 0;
 
   const totalTrades = trades?.length ?? 0;
   const winningTrades = trades?.filter((t) => getAdjustedRealized(t) > 0) ?? [];
@@ -50,7 +59,12 @@ export default function MainDashboard() {
   const pnlratio = averageWin / (averageLoss || 1);
 
   // Overall Expectancy
-  const expectancy = (winRate * averageWin) - ((1 - winRate) * averageLoss);
+  const expectancy = winRate * averageWin - (1 - winRate) * averageLoss;
+
+  // Filter accounts to only show those included in analytics
+  const analyticsAccounts = React.useMemo(() => {
+    return accounts?.filter((account) => account.isAnalyticsIncluded) || [];
+  }, [accounts]);
 
   return (
     <div>
@@ -69,7 +83,7 @@ export default function MainDashboard() {
       <div className="py-4 px-4 lg:px-6">
         <Card>
           <CardContent>
-            <DataTable columns={columns} data={accounts || []} />
+            <DataTable columns={columns} data={analyticsAccounts} />
           </CardContent>
         </Card>
       </div>

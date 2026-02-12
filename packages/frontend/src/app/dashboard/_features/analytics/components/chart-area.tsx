@@ -27,24 +27,49 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import { useAnalyticsUIStore } from "@/stores/analytics-ui-store";
 
 export function ChartAreaInteractive() {
   const isMobile = useIsMobile();
-  const { data: trades } = useSWR<Trade[]>("/trade/", fetcher);
+  const { data: allTrades } = useSWR<Trade[]>("/trade/", fetcher);
   const { data: accounts } = useSWR("/account/", fetcher);
   const [timeRange, setTimeRange] = React.useState("90d");
+  const limitFilter = useAnalyticsUIStore((s) => s.limitFilter);
+
+  // Apply visibility and limit filter to trades
+  const trades = React.useMemo(() => {
+    if (!allTrades) return undefined;
+
+    // First filter by visibility (default to true if undefined)
+    let filteredTrades = allTrades.filter(
+      (trade) => trade.isVisibleInAnalytics !== false,
+    );
+
+    // Then apply limit filter
+    if (limitFilter) {
+      filteredTrades = filteredTrades.slice(0, limitFilter);
+    }
+
+    return filteredTrades;
+  }, [allTrades, limitFilter]);
 
   // Helper function to get adjusted realized value
-  const getAdjustedRealized = React.useCallback((trade: Trade) => {
-    if (!accounts) return Number(trade.realized);
+  const getAdjustedRealized = React.useCallback(
+    (trade: Trade) => {
+      if (!accounts) return Number(trade.realized);
 
-    const account = accounts.find((acc: { id: string; isCommissionsIncluded?: boolean }) => acc.id === trade.accountId);
-    const isCommissionsIncluded = account?.isCommissionsIncluded || false;
-    const realized = Number(trade.realized);
-    const fees = Number(trade.fees) || 0;
+      const account = accounts.find(
+        (acc: { id: string; isCommissionsIncluded?: boolean }) =>
+          acc.id === trade.accountId,
+      );
+      const isCommissionsIncluded = account?.isCommissionsIncluded || false;
+      const realized = Number(trade.realized);
+      const fees = Number(trade.fees) || 0;
 
-    return isCommissionsIncluded ? realized - fees : realized;
-  }, [accounts]);
+      return isCommissionsIncluded ? realized - fees : realized;
+    },
+    [accounts],
+  );
 
   // Group and sum realized per day
   const groupedData = React.useMemo(() => {
@@ -59,7 +84,7 @@ export function ChartAreaInteractive() {
 
     // Convert to cumulative sorted list
     const sortedDates = Array.from(map.entries()).sort(([a], [b]) =>
-      a.localeCompare(b)
+      a.localeCompare(b),
     );
 
     let cumulative = 0;
@@ -89,8 +114,8 @@ export function ChartAreaInteractive() {
           {timeRange === "365d"
             ? "Total for the last 1 year"
             : timeRange === "90d"
-            ? "Total for the last 3 months"
-            : "Total for the last 30 days"}
+              ? "Total for the last 3 months"
+              : "Total for the last 30 days"}
         </CardDescription>
         <CardAction>
           <ToggleGroup

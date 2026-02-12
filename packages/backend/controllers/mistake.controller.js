@@ -165,11 +165,28 @@ exports.deleteMistake = async (req, res) => {
 
 exports.getMistakeAnalytics = async (req, res) => {
   const { id: userId } = req.user;
+  const { limit } = req.query; // Get limit from query params
   const { Trade } = require("../models");
   const { sequelize } = require("../models");
   const { QueryTypes } = require("sequelize");
 
   try {
+    // Get the user's trades based on limit and visibility
+    let tradeQuery = {
+      where: {
+        userId,
+        isVisibleInAnalytics: true, // Only include visible trades in analytics
+      },
+      order: [["date", "DESC"]], // Order by most recent first
+    };
+
+    if (limit && !isNaN(parseInt(limit))) {
+      tradeQuery.limit = parseInt(limit);
+    }
+
+    const limitedTradesData = await Trade.findAll(tradeQuery);
+    const limitedTradeIds = limitedTradesData.map((t) => t.id);
+
     // Get all mistakes for the user
     const mistakes = await Mistake.findAll({
       where: { userId },
@@ -178,6 +195,11 @@ exports.getMistakeAnalytics = async (req, res) => {
           model: Trade,
           as: "Trades",
           attributes: ["id", "grade", "realized", "date"],
+          ...(limitedTradeIds.length > 0 && {
+            where: {
+              id: limitedTradeIds,
+            },
+          }),
         },
       ],
     });
@@ -189,7 +211,7 @@ exports.getMistakeAnalytics = async (req, res) => {
 
         // Frequency Analysis
         const frequency = trades.length;
-        const totalTrades = await Trade.count({ where: { userId } });
+        const totalTrades = limitedTradesData.length;
         const percentageOfTrades =
           totalTrades > 0 ? ((frequency / totalTrades) * 100).toFixed(2) : 0;
 
@@ -219,20 +241,16 @@ exports.getMistakeAnalytics = async (req, res) => {
               ).toFixed(2)
             : null;
 
-        // Get average grade for all user's trades (for comparison)
-        const allTradesWithGrades = await Trade.findAll({
-          where: {
-            userId,
-            grade: { [require("sequelize").Op.ne]: null },
-          },
-          attributes: ["grade"],
-        });
+        // Get average grade for limited trades (for comparison)
+        const limitedTradesWithGrades = limitedTradesData.filter(
+          (t) => t.grade !== null,
+        );
 
         const overallAverageGrade =
-          allTradesWithGrades.length > 0
+          limitedTradesWithGrades.length > 0
             ? (
-                allTradesWithGrades.reduce((sum, t) => sum + t.grade, 0) /
-                allTradesWithGrades.length
+                limitedTradesWithGrades.reduce((sum, t) => sum + t.grade, 0) /
+                limitedTradesWithGrades.length
               ).toFixed(2)
             : null;
 
@@ -272,21 +290,17 @@ exports.getMistakeAnalytics = async (req, res) => {
     // Sort by frequency (most common mistakes first)
     analytics.sort((a, b) => b.frequency.count - a.frequency.count);
 
+    // Count trades with mistakes from the limited set
+    const tradesWithMistakesCount = limitedTradesData.filter((trade) =>
+      mistakes.some((mistake) => mistake.Trades.some((t) => t.id === trade.id)),
+    ).length;
+
     res.status(200).json({
       analytics,
       summary: {
         totalMistakes: mistakes.length,
-        totalTrades: await Trade.count({ where: { userId } }),
-        tradesWithMistakes: await Trade.count({
-          where: { userId },
-          include: [
-            {
-              model: Mistake,
-              as: "Mistakes",
-              required: true,
-            },
-          ],
-        }),
+        totalTrades: limitedTradesData.length,
+        tradesWithMistakes: tradesWithMistakesCount,
       },
     });
   } catch (err) {

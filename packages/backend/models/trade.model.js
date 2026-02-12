@@ -95,5 +95,10 @@ module.exports = (sequelize, DataTypes) => {
         key: "id",
       },
     },
+    isVisibleInAnalytics: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   });
 };

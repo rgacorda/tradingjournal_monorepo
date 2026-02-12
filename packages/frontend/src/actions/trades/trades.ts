@@ -20,6 +20,7 @@ export type Trade = {
   broker: string;
   planId: string;
   accountId: string;
+  isVisibleInAnalytics?: boolean;
 };
 
 // ✅ Central error handler to avoid code duplication
@@ -28,7 +29,7 @@ const handleAxiosError = (error: unknown, fallbackMessage: string): never => {
     const axiosError = error as AxiosError<{ message?: string }>;
     console.error(
       fallbackMessage,
-      axiosError.response?.data || axiosError.message
+      axiosError.response?.data || axiosError.message,
     );
     throw new Error(axiosError.response?.data?.message || fallbackMessage);
   }
@@ -67,7 +68,7 @@ export const getTradebyId = async (id: string | null) => {
 
 export const updateTrade = async (
   id: string | null,
-  data: Partial<Trade> & { mistakeIds?: string[] }
+  data: Partial<Trade> & { mistakeIds?: string[] },
 ) => {
   if (!id) return;
   try {
