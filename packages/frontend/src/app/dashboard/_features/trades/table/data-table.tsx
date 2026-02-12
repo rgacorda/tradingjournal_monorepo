@@ -85,11 +85,13 @@ export function DataTable<TData, TValue>({
             <SelectContent>
               <SelectGroup>
                 <SelectLabel>Accounts</SelectLabel>
-                {accounts?.map(({ name, id }) => (
-                  <SelectItem key={id} value={id || ""}>
-                    {name}
-                  </SelectItem>
-                ))}
+                {accounts
+                  ?.filter((account) => account.isAnalyticsIncluded === true)
+                  .map(({ name, id }) => (
+                    <SelectItem key={id} value={id || ""}>
+                      {name}
+                    </SelectItem>
+                  ))}
               </SelectGroup>
               <SelectGroup>
                 <SelectLabel>Plans</SelectLabel>
