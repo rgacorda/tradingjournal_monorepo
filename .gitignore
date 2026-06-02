@@ -64,6 +64,8 @@ pnpm-debug.log*
 # BUT keep example env files
 !.env.example
 !**/.env.example
+.env.docker
+.env.backend
 
 # IDEs and Editors
 .vscode/

@@ -1,6 +1,6 @@
 # AWS Deployment Guide - Trading Journal Monorepo
 
-Complete guide for deploying the Trading Journal application to AWS with Nginx reverse proxy, systemd services, and GoDaddy/Route53 DNS configuration.
+Complete guide for deploying the Trading Journal application to AWS with Docker (MySQL, backend, frontend), Nginx reverse proxy, and GoDaddy/Route53 DNS configuration.
 
 ---
 
@@ -10,14 +10,12 @@ Complete guide for deploying the Trading Journal application to AWS with Nginx r
 2. [Server Setup](#server-setup)
 3. [Install Dependencies](#install-dependencies)
 4. [Clone and Setup Repository](#clone-and-setup-repository)
-5. [Configure Backend](#configure-backend)
-6. [Configure Frontend](#configure-frontend)
-7. [Create Systemd Services](#create-systemd-services)
-8. [Configure Nginx](#configure-nginx)
-9. [Setup SSL with Let's Encrypt](#setup-ssl-with-lets-encrypt)
-10. [DNS Configuration (GoDaddy + Route53)](#dns-configuration-godaddy--route53)
-11. [Deployment Commands](#deployment-commands)
-12. [Troubleshooting](#troubleshooting)
+5. [Docker Setup](#docker-setup)
+6. [Configure Nginx](#configure-nginx)
+7. [Setup SSL with Let's Encrypt](#setup-ssl-with-lets-encrypt)
+8. [DNS Configuration (GoDaddy + Route53)](#dns-configuration-godaddy--route53)
+9. [Deployment Commands](#deployment-commands)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -26,9 +24,10 @@ Complete guide for deploying the Trading Journal application to AWS with Nginx r
 ### AWS Resources
 
 - EC2 instance (Ubuntu 20.04/22.04 recommended)
-- Security group with ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL - optional)
+- Security group with ports: 22 (SSH), 80 (HTTP), 443 (HTTPS)
+  - Do **not** expose port 3306 publicly; MySQL runs in Docker bound to `127.0.0.1` only
 - Elastic IP (recommended for stable IP address)
-- RDS MySQL instance (or MySQL on EC2)
+- Docker and Docker Compose on the EC2 instance (MySQL runs as a container)
 
 ### Domain Setup
 
@@ -56,35 +55,30 @@ ssh -i your-key.pem ubuntu@your-ec2-ip-address
 sudo apt update && sudo apt upgrade -y
 ```
 
-### 3. Install Node.js (v18 or higher)
+### 3. Install Node.js (optional — local development only)
+
+Production runs Node inside Docker containers. Skip this step on the server unless you develop directly on EC2:
 
 ```bash
-# Install Node.js 18.x
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
-
-# Verify installation
-node --version  # Should be v18.x or higher
+node --version
 npm --version
 ```
 
-### 4. Install MySQL (if not using RDS)
+### 4. Install Docker
 
 ```bash
-sudo apt install mysql-server -y
-sudo mysql_secure_installation
+# Install Docker Engine and Compose plugin
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker ubuntu
 
-# Create database
-sudo mysql -u root -p
+# Log out and back in so group membership applies, then verify:
+docker --version
+docker compose version
 ```
 
-```sql
-CREATE DATABASE trading_journal;
-CREATE USER 'trading_user'@'localhost' IDENTIFIED BY 'your_secure_password';
-GRANT ALL PRIVILEGES ON trading_journal.* TO 'trading_user'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
-```
+> **Note:** After adding your user to the `docker` group, reconnect via SSH before running Docker commands without `sudo`.
 
 ---
 
@@ -139,7 +133,9 @@ cd app
 sudo chown -R ubuntu:ubuntu /var/www/app
 ```
 
-### 4. Install Dependencies
+### 4. Install Dependencies (local development only)
+
+Production builds dependencies inside Docker. For local development:
 
 ```bash
 cd /var/www/app
@@ -148,188 +144,162 @@ npm install
 
 ---
 
-## Configure Backend
+## Docker Setup
 
-### 1. Create Backend .env File
+Production runs all application services in Docker on a shared `app-network`:
+
+| Service  | Container               | Host port | Internal port |
+| -------- | ----------------------- | --------- | ------------- |
+| MySQL    | `trading-journal-mysql` | 127.0.0.1:3306 | 3306     |
+| Backend  | `trading-journal-backend` | 127.0.0.1:8000 | 8000   |
+| Frontend | `trading-journal-frontend` | 127.0.0.1:8080 | 3000  |
+
+The backend connects to MySQL via the Docker service name `mysql` (`DB_HOST=mysql`). Nginx on the host proxies public traffic to `127.0.0.1:8000` and `127.0.0.1:8080`.
+
+### 1. Create Environment Files
 
 ```bash
-cd /var/www/app/packages/backend
+cd /var/www/app
+
+cp .env.docker.example .env.docker
+cp .env.backend.example .env.backend
+cp .env.compose.example .env
+
+nano .env.docker
+nano .env.backend
 nano .env
 ```
 
-### 2. Backend Environment Variables
+**`.env.docker`** — MySQL container credentials:
 
 ```env
-# Server Configuration
+MYSQL_ROOT_PASSWORD=your_root_password_here
+MYSQL_DATABASE=trading_journal
+MYSQL_USER=trading_user
+MYSQL_PASSWORD=your_secure_password_here
+```
+
+**`.env.backend`** — Backend secrets (`DB_HOST` / `DB_PORT` are set in `docker-compose.yml`):
+
+```env
 PORT=8000
 NODE_ENV=production
 
-# Database Configuration
 DB_NAME=trading_journal
 DB_USER=trading_user
-DB_PASSWORD=your_secure_password
-DB_HOST=127.0.0.1
-# For RDS, use: your-rds-endpoint.region.rds.amazonaws.com
-DB_PORT=3306
+DB_PASSWORD=your_secure_password_here
 
-# JWT Secrets (generate with: openssl rand -base64 32)
 JWT_SECRET=your_jwt_secret_here
 JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
 
-# CORS Configuration
 CORS_ORIGIN=https://yourdomain.com,https://www.yourdomain.com
 FRONTEND_URL_HTTP=http://yourdomain.com
 FRONTEND_URL_HTTPS=https://yourdomain.com
 
-# Google OAuth (for Gmail features)
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REFRESH_TOKEN=your_google_refresh_token
 GMAIL_OAUTH_USER=your_email@gmail.com
 ```
 
-### 3. Generate JWT Secrets
+Use the same `DB_USER` / `DB_PASSWORD` as in `.env.docker`.
 
-```bash
-# Generate random secrets
-openssl rand -base64 32
-openssl rand -base64 32
-```
-
----
-
-## Configure Frontend
-
-### 1. Create Frontend .env File
-
-```bash
-cd /var/www/app/packages/frontend
-nano .env.production
-```
-
-### 2. Frontend Environment Variables
+**`.env`** — Compose build variable (public API URL baked into the frontend at build time):
 
 ```env
-# API Configuration
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com
-NEXT_PUBLIC_FRONTEND_URL=https://yourdomain.com
-
-# Environment
-NODE_ENV=production
+NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com/
 ```
 
-### 3. Build Frontend
+Generate JWT secrets:
+
+```bash
+openssl rand -base64 32
+openssl rand -base64 32
+```
+
+### 2. Build and Start All Services
 
 ```bash
 cd /var/www/app
-npm run build --filter=frontend
+docker compose up -d --build
+```
+
+### 3. Verify Containers
+
+```bash
+docker compose ps
+
+docker compose exec mysql mysql -u trading_user -p trading_journal -e "SELECT 1;"
+
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+### 4. Enable Stack on Boot
+
+```bash
+sudo nano /etc/systemd/system/trading-journal.service
+```
+
+```ini
+[Unit]
+Description=Trading Journal (Docker Compose)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/var/www/app
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=ubuntu
+Group=docker
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable trading-journal
+sudo systemctl start trading-journal
+```
+
+### 5. Docker Commands (Quick Reference)
+
+```bash
+cd /var/www/app
+
+docker compose up -d --build
+docker compose up -d --build backend
+docker compose up -d --build frontend
+
+docker compose logs -f
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f mysql
+
+docker compose stop
+docker compose restart backend
+
+docker compose exec mysql mysql -u trading_user -p trading_journal
+docker compose exec backend sh
 ```
 
 ---
 
-## Create Systemd Services
+## Configure Backend (local development only)
 
-### 1. Backend Service
-
-```bash
-sudo nano /etc/systemd/system/trading-backend.service
-```
-
-**Add the following:**
-
-```ini
-[Unit]
-Description=Trading Journal Backend API
-After=network.target mysql.service
-Wants=mysql.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/var/www/app/packages/backend
-Environment=NODE_ENV=production
-ExecStart=/usr/bin/node app.js
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=trading-backend
-
-# Security
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 2. Frontend Service
+For production, use `.env.backend` with Docker (see [Docker Setup](#docker-setup)). For local development without Docker:
 
 ```bash
-sudo nano /etc/systemd/system/trading-frontend.service
+cd packages/backend
+cp .env.example .env
+nano .env
 ```
 
-**Add the following:**
-
-```ini
-[Unit]
-Description=Trading Journal Frontend (Next.js)
-After=network.target trading-backend.service
-Wants=trading-backend.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/var/www/app/packages/frontend
-Environment=NODE_ENV=production
-Environment=PORT=8080
-ExecStart=/usr/bin/npm start
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=trading-frontend
-
-# Security
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 3. Enable and Start Services
-
-```bash
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable services (auto-start on boot)
-sudo systemctl enable trading-backend
-sudo systemctl enable trading-frontend
-
-# Start services
-sudo systemctl start trading-backend
-sudo systemctl start trading-frontend
-
-# Check status
-sudo systemctl status trading-backend
-sudo systemctl status trading-frontend
-```
-
-### 4. View Logs
-
-```bash
-# Backend logs
-sudo journalctl -u trading-backend -f
-
-# Frontend logs
-sudo journalctl -u trading-frontend -f
-
-# Last 100 lines
-sudo journalctl -u trading-backend -n 100
-sudo journalctl -u trading-frontend -n 100
-```
+Set `DB_HOST=127.0.0.1` when MySQL runs locally or via `docker compose up -d mysql`.
 
 ---
 
@@ -642,31 +612,22 @@ cd /var/www/app
 # 3. Pull latest changes
 git pull origin main
 
-# 4. Install dependencies
-npm install
+# 4. Build and start all containers
+docker compose up -d --build
 
-# 5. Build frontend
-npm run build --filter=frontend
-
-# 6. Restart services
-sudo systemctl restart trading-backend
-sudo systemctl restart trading-frontend
-
-# 7. Check status
-sudo systemctl status trading-backend
-sudo systemctl status trading-frontend
+# 5. Check status
+docker compose ps
+docker compose logs --tail=20 backend
+docker compose logs --tail=20 frontend
 ```
 
 ### Update Deployment
 
 ```bash
-# Quick update script
 cd /var/www/app
 git pull origin main
-npm install
-npm run build --filter=frontend
-sudo systemctl restart trading-backend
-sudo systemctl restart trading-frontend
+docker compose up -d --build
+docker compose ps
 ```
 
 ### Create Deployment Script
@@ -688,21 +649,12 @@ cd /var/www/app
 echo "📦 Pulling latest changes..."
 git pull origin main
 
-echo "📦 Installing dependencies..."
-npm install
-
-echo "🔨 Building frontend..."
-npm run build --filter=frontend
-
-echo "🔄 Restarting services..."
-sudo systemctl restart trading-backend
-sudo systemctl restart trading-frontend
+echo "🔨 Building and restarting containers..."
+docker compose up -d --build
 
 echo "✅ Deployment complete!"
 
-echo "📊 Service status:"
-sudo systemctl status trading-backend --no-pager
-sudo systemctl status trading-frontend --no-pager
+docker compose ps
 ```
 
 **Make executable:**
@@ -721,37 +673,44 @@ chmod +x /var/www/app/deploy.sh
 
 ## Troubleshooting
 
-### Service Not Starting
+### Container Not Starting
 
 ```bash
-# Check service status
-sudo systemctl status trading-backend
-sudo systemctl status trading-frontend
+cd /var/www/app
 
-# View detailed logs
-sudo journalctl -u trading-backend -n 50
-sudo journalctl -u trading-frontend -n 50
+docker compose ps
+docker compose logs --tail=50 backend
+docker compose logs --tail=50 frontend
 
 # Check if ports are in use
-sudo netstat -tulpn | grep 8000
-sudo netstat -tulpn | grep 8080
+sudo ss -tulpn | grep 8000
+sudo ss -tulpn | grep 8080
 
-# Kill process on port (if needed)
-sudo kill -9 $(sudo lsof -t -i:8000)
-sudo kill -9 $(sudo lsof -t -i:8080)
+# Rebuild a specific service
+docker compose up -d --build backend
+docker compose up -d --build frontend
 ```
 
 ### Database Connection Issues
 
 ```bash
-# Test database connection
-mysql -u trading_user -p trading_journal
+cd /var/www/app
 
-# Check MySQL status
-sudo systemctl status mysql
+# Check MySQL container status
+docker compose ps mysql
+docker compose logs --tail=50 mysql
 
-# View MySQL logs
-sudo tail -f /var/log/mysql/error.log
+# Test connection via Docker
+docker compose exec mysql mysql -u trading_user -p trading_journal -e "SELECT 1;"
+
+# Test connection from host (requires mysql-client: sudo apt install mysql-client)
+mysql -h 127.0.0.1 -P 3306 -u trading_user -p trading_journal
+
+# Restart MySQL container
+docker compose restart mysql
+
+# If container won't start, inspect logs
+docker compose logs -f mysql
 ```
 
 ### Nginx Issues
@@ -796,11 +755,10 @@ dig NS yourdomain.com
 ### Application Errors
 
 ```bash
-# Backend logs
-sudo journalctl -u trading-backend -f
+cd /var/www/app
 
-# Frontend logs
-sudo journalctl -u trading-frontend -f
+docker compose logs -f backend
+docker compose logs -f frontend
 
 # Nginx access logs
 sudo tail -f /var/log/nginx/api-access.log
@@ -811,21 +769,19 @@ df -h
 
 # Check memory usage
 free -h
-
-# Check running processes
-top
 ```
 
 ---
 
 ## Security Checklist
 
-- [ ] EC2 security group configured with minimal required ports
+- [ ] EC2 security group configured with minimal required ports (3306 not exposed publicly)
 - [ ] SSH key-based authentication (no password login)
 - [ ] Firewall configured (ufw)
 - [ ] SSL certificates installed and auto-renewing
 - [ ] Environment variables properly set (not committed to git)
-- [ ] Database password is strong and secure
+- [ ] `.env.docker`, `.env.backend`, and root `.env` use strong secrets and are not in git
+- [ ] MySQL Docker port bound to `127.0.0.1` only
 - [ ] JWT secrets are randomly generated
 - [ ] Regular backups configured
 - [ ] Monitoring and alerts setup (CloudWatch)
@@ -880,6 +836,8 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
 
 ### Database Backup
 
+Backups run `mysqldump` inside the MySQL container so no host MySQL client is required.
+
 ```bash
 # Create backup script
 nano /var/www/app/backup-db.sh
@@ -887,14 +845,39 @@ nano /var/www/app/backup-db.sh
 
 ```bash
 #!/bin/bash
+set -e
+
+cd /var/www/app
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_DIR="/var/backups/mysql"
 mkdir -p $BACKUP_DIR
 
-mysqldump -u trading_user -p'your_password' trading_journal > $BACKUP_DIR/backup_$TIMESTAMP.sql
+# Load credentials from .env.docker
+set -a
+source .env.docker
+set +a
+
+docker compose exec -T mysql mysqldump \
+  -u "$MYSQL_USER" \
+  -p"$MYSQL_PASSWORD" \
+  "$MYSQL_DATABASE" > "$BACKUP_DIR/backup_$TIMESTAMP.sql"
 
 # Keep only last 7 days
 find $BACKUP_DIR -name "backup_*.sql" -mtime +7 -delete
+
+echo "Backup saved to $BACKUP_DIR/backup_$TIMESTAMP.sql"
+```
+
+### Restore from Backup
+
+```bash
+cd /var/www/app
+set -a && source .env.docker && set +a
+
+docker compose exec -T mysql mysql \
+  -u "$MYSQL_USER" \
+  -p"$MYSQL_PASSWORD" \
+  "$MYSQL_DATABASE" < /var/backups/mysql/backup_YYYYMMDD_HHMMSS.sql
 ```
 
 ```bash
@@ -915,28 +898,22 @@ Add:
 
 ## Quick Reference
 
-### Service Commands
+### Docker Commands
 
 ```bash
-# Start services
-sudo systemctl start trading-backend
-sudo systemctl start trading-frontend
+cd /var/www/app
 
-# Stop services
-sudo systemctl stop trading-backend
-sudo systemctl stop trading-frontend
+docker compose ps
+docker compose up -d --build
+docker compose stop
+docker compose restart backend
 
-# Restart services
-sudo systemctl restart trading-backend
-sudo systemctl restart trading-frontend
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f mysql
 
-# Check status
-sudo systemctl status trading-backend
-sudo systemctl status trading-frontend
-
-# View logs
-sudo journalctl -u trading-backend -f
-sudo journalctl -u trading-frontend -f
+docker compose exec mysql mysql -u trading_user -p trading_journal
+docker compose exec backend sh
 ```
 
 ### Nginx Commands
@@ -962,7 +939,7 @@ sudo tail -f /var/log/nginx/error.log
 For issues or questions, refer to:
 
 - [README.md](README.md) - Project documentation
-- Application logs via `journalctl`
+- Container logs via `docker compose logs`
 - Nginx logs in `/var/log/nginx/`
 
 ---
@@ -1079,7 +1056,7 @@ This section provides a comprehensive analysis of the application's readiness fo
    const { Op } = require("sequelize");
 
    exports.handler = async (event) => {
-     const sequelize = new Sequelize(/* RDS connection */);
+     const sequelize = new Sequelize(/* DB connection from env vars */);
      const RefreshToken = require("./models/token.model")(sequelize);
 
      const deleted = await RefreshToken.destroy({
@@ -1198,6 +1175,8 @@ aws elbv2 modify-target-group-attributes \
 
 #### Database Scaling
 
+Production runs MySQL in Docker on the same EC2 instance. For higher traffic or HA, migrate to Amazon RDS or a managed MySQL service and point `DB_HOST` at the remote endpoint.
+
 ##### Connection Pooling (Must Implement)
 
 Modify `packages/backend/config/db.js`:
@@ -1234,10 +1213,29 @@ module.exports = sequelize;
 
 - Total max connections: 3 × 10 = 30 connections
 - Ensure MySQL `max_connections` > 30 (recommend 100+)
+- For Docker MySQL, raise limits in `docker-compose.yml` if needed:
 
-##### Vertical Scaling (RDS)
+```yaml
+command: >
+  --default-authentication-plugin=mysql_native_password
+  --character-set-server=utf8mb4
+  --collation-server=utf8mb4_unicode_ci
+  --max-connections=150
+```
 
-✅ **Ready:** No code changes needed
+##### Vertical Scaling (Docker MySQL on EC2)
+
+For a single-server Docker setup, scale the EC2 instance (more CPU/RAM/disk) and ensure the Docker volume has enough space:
+
+```bash
+# Check Docker volume disk usage
+docker system df -v
+df -h /var/lib/docker
+```
+
+##### Vertical Scaling (RDS — optional migration)
+
+When outgrowing Docker MySQL, migrate to RDS with no application code changes beyond `DB_HOST`:
 
 ```bash
 # Modify RDS instance class
@@ -1254,9 +1252,9 @@ Recommended instance progression:
 - Medium production: db.t3.medium or db.r6g.large
 - Large production: db.r6g.xlarge or higher
 
-##### Read Replicas
+##### Read Replicas (RDS only)
 
-✅ **90% Ready:** Minor code changes needed
+When using RDS (not Docker MySQL), read replicas are supported with minor code changes:
 
 ```bash
 # Create read replica
@@ -1398,7 +1396,7 @@ exports.getUser = async (req, res) => {
 - [ ] Implement health check endpoint
 - [ ] Add application logging (Winston or Pino)
 - [ ] Set up monitoring (CloudWatch)
-- [ ] Enable RDS Multi-AZ
+- [ ] Enable RDS Multi-AZ (if migrated off Docker MySQL)
 
 ##### Phase 2: Essential Fixes (2-3 weeks)
 
@@ -1422,7 +1420,7 @@ exports.getUser = async (req, res) => {
 
 ##### Phase 4: Optimization (Ongoing)
 
-- [ ] Add RDS Read Replicas
+- [ ] Add RDS Read Replicas (if using RDS)
 - [ ] Implement query caching
 - [ ] Add CDN for static assets
 - [ ] Set up auto-scaling groups
@@ -1433,14 +1431,16 @@ exports.getUser = async (req, res) => {
 ##### Current (Single Instance)
 
 - EC2 t3.small: ~$15/month
-- RDS db.t3.micro: ~$15/month (free tier available)
+- EC2 t3.small + Docker MySQL: ~$15–20/month
+- RDS db.t3.micro (optional): ~$15/month (free tier available)
 - Total: ~$30/month
 
 ##### Scaled (3 Instances + Load Balancer)
 
 - EC2 t3.small × 3: ~$45/month
 - Application Load Balancer: ~$25/month
-- RDS db.t3.small: ~$30/month
+- EC2 t3.medium + Docker MySQL: ~$30–40/month
+- RDS db.t3.small (optional): ~$30/month
 - RDS Multi-AZ: +$30/month
 - S3 storage (100GB): ~$2.30/month
 - ElastiCache (Redis) t3.micro: ~$15/month
@@ -1451,7 +1451,7 @@ exports.getUser = async (req, res) => {
 
 - Add instances when CPU > 70% for 10+ minutes
 - Add read replicas when read queries > 1000/sec
-- Upgrade RDS when connections approach max
+- Upgrade EC2 or migrate to RDS when connections approach max
 - Add caching when database latency > 100ms
 
 #### Performance Benchmarks
@@ -1459,7 +1459,7 @@ exports.getUser = async (req, res) => {
 ##### Current Expected Performance
 
 - Single instance: ~500-1000 req/sec
-- Database: ~2000 queries/sec (db.t3.small)
+- Database: ~2000 queries/sec (Docker MySQL on t3.small)
 
 ##### After Horizontal Scaling
 
@@ -1511,4 +1511,4 @@ aws cloudwatch put-metric-alarm \
 
 ---
 
-**Last Updated:** 2025-01-10
+**Last Updated:** 2026-06-02
