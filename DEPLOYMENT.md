@@ -1,185 +1,186 @@
-# AWS Deployment Guide - Trading Journal Monorepo
+# Trading Journal Deployment Guide
 
-Complete guide for deploying the Trading Journal application to AWS with Docker (MySQL, backend, frontend), Nginx reverse proxy, and GoDaddy/Route53 DNS configuration.
+## Overview
 
----
+Deploy the **Trading Journal** monorepo to Ubuntu using a **`~/production`** layout (same *folder pattern* you may use for other projects: app code in a subfolder, shared `docker-compose.yml`, nginx configs in `conf.d/`).
 
-## Table of Contents
+**This guide is only for Trading Journal** — not bundled with any other application.
 
-1. [Prerequisites](#prerequisites)
-2. [Server Setup](#server-setup)
-3. [Install Dependencies](#install-dependencies)
-4. [Clone and Setup Repository](#clone-and-setup-repository)
-5. [Docker Setup](#docker-setup)
-6. [Configure Nginx](#configure-nginx)
-7. [Setup SSL with Let's Encrypt](#setup-ssl-with-lets-encrypt)
-8. [DNS Configuration (GoDaddy + Route53)](#dns-configuration-godaddy--route53)
-9. [Deployment Commands](#deployment-commands)
-10. [Troubleshooting](#troubleshooting)
+| Path | Purpose |
+| ---- | ------- |
+| `~/production/trading-journal/` | Git clone of this repository |
+| `~/production/docker-compose.yml` | MySQL, backend, frontend, nginx |
+| `~/production/nginx/conf.d/trading-journal.conf` | Reverse proxy |
+| `~/production/trading-journal-mysql-data/` | MySQL data volume |
+| `~/production/certbot/` | SSL certificates (after Part 7) |
 
----
+**Stack:**
 
-## Prerequisites
+- **Backend API** (Express) — port `8000` (internal)
+- **Frontend** (Next.js) — port `3000` (internal)
+- **MySQL 8** — internal only
+- **Nginx** — ports `80` / `443` (public)
 
-### AWS Resources
+**URLs:**
 
-- EC2 instance (Ubuntu 20.04/22.04 recommended)
-- Security group with ports: 22 (SSH), 80 (HTTP), 443 (HTTPS)
-  - Do **not** expose port 3306 publicly; MySQL runs in Docker bound to `127.0.0.1` only
-- Elastic IP (recommended for stable IP address)
-- Docker and Docker Compose on the EC2 instance (MySQL runs as a container)
+- `https://api.yourdomain.com` — Backend API
+- `https://yourdomain.com` / `https://www.yourdomain.com` — Frontend
 
-### Domain Setup
-
-- GoDaddy domain purchased
-- AWS Route53 hosted zone configured
-
-### Local Requirements
-
-- SSH key pair for EC2 access
-- Git repository (GitHub, GitLab, etc.)
+Repo templates: `production/docker-compose.yml`, `production/nginx/conf.d/trading-journal.conf`.
 
 ---
 
-## Server Setup
+## Quick Start
 
-### 1. Connect to EC2 Instance
+Follow these parts in order:
+
+1. **Part 1:** Server Preparation (Steps 1.1 - 1.6)
+2. **Part 2:** Application Setup (Steps 2.1 - 2.4)
+3. **Part 3:** Application Dockerfiles (Steps 3.1 - 3.4)
+4. **Part 4:** Docker Compose Setup (Step 4.1)
+5. **Part 5:** Nginx Configuration (Step 5.1)
+6. **Part 6:** Deploy All Services (Steps 6.1 - 6.3)
+7. **Part 7:** SSL/HTTPS Setup (Steps 7.1 - 7.5)
+8. **Part 8:** Maintenance & Operations
+9. **Part 9:** Another site already on this server (optional)
+
+> **DNS:** Complete **Step 1.6** before **Part 7** (SSL).
+
+> **Server already hosts another app in `~/production`?** See **[Part 9](#part-9-another-site-already-on-this-server-optional)**.
+
+---
+
+## Part 1: Server Preparation
+
+### Step 1.1: Prerequisites
+
+- Ubuntu 20.04/22.04 LTS
+- 2GB+ RAM (4GB+ recommended)
+- 20GB+ free disk
+- Domain on GoDaddy: `yourdomain.com`, `www`, `api`
+- SSH access with sudo
+
+---
+
+### Step 1.2: Connect and Update Server
 
 ```bash
-ssh -i your-key.pem ubuntu@your-ec2-ip-address
-```
-
-### 2. Update System
-
-```bash
+ssh username@YOUR_SERVER_IP
 sudo apt update && sudo apt upgrade -y
+sudo apt install curl git unzip build-essential -y
 ```
 
-### 3. Install Node.js (optional — local development only)
+---
 
-Production runs Node inside Docker containers. Skip this step on the server unless you develop directly on EC2:
+### Step 1.3: Configure Firewall
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-node --version
-npm --version
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status
 ```
 
-### 4. Install Docker
+---
+
+### Step 1.4: Install Docker and Docker Compose
 
 ```bash
-# Install Docker Engine and Compose plugin
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker ubuntu
+sudo apt install docker.io docker-compose-plugin -y
+# OR: curl -fsSL https://get.docker.com | sudo sh
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker $USER
+newgrp docker
+```
 
-# Log out and back in so group membership applies, then verify:
+```bash
 docker --version
 docker compose version
 ```
 
-> **Note:** After adding your user to the `docker` group, reconnect via SSH before running Docker commands without `sudo`.
-
 ---
 
-## Install Dependencies
-
-### 1. Install Nginx
+### Step 1.5: Create Project Directory Structure
 
 ```bash
-sudo apt install nginx -y
-sudo systemctl enable nginx
-sudo systemctl start nginx
-```
-
-### 2. Install PM2 (Alternative to systemd - optional)
-
-```bash
-sudo npm install -g pm2
-```
-
-### 3. Install Git
-
-```bash
-sudo apt install git -y
+mkdir -p ~/production/trading-journal
+mkdir -p ~/production/nginx/conf.d
+mkdir -p ~/production/certbot/conf
+mkdir -p ~/production/certbot/www
+mkdir -p ~/production/trading-journal-mysql-data
+mkdir -p ~/production/backups/trading-journal
+cd ~/production
 ```
 
 ---
 
-## Clone and Setup Repository
+### Step 1.6: Configure GoDaddy DNS
 
-### 1. Create Application Directory
+Add **A** records → your server IP:
+
+| Type | Name | Value |
+| ---- | ---- | ----- |
+| A | `@` | `YOUR_SERVER_IP` |
+| A | `www` | `YOUR_SERVER_IP` |
+| A | `api` | `YOUR_SERVER_IP` |
+
+Verify before Part 7:
 
 ```bash
-sudo mkdir -p /var/www
-cd /var/www
+dig +short yourdomain.com
+dig +short api.yourdomain.com
 ```
 
-### 2. Clone Repository
+---
+
+## Part 2: Application Setup
+
+### Step 2.1: Clone Repository
 
 ```bash
-# Using HTTPS
-sudo git clone https://github.com/your-username/trading-journal-monorepo.git app
-
-# OR using SSH (recommended)
-sudo git clone git@github.com:your-username/trading-journal-monorepo.git app
-
-cd app
+cd ~/production/trading-journal
+git clone YOUR_REPOSITORY_URL .
 ```
 
-### 3. Set Ownership
+SSH example:
 
 ```bash
-sudo chown -R ubuntu:ubuntu /var/www/app
+git clone git@github.com:yourusername/trading-journal-monorepo.git .
 ```
 
-### 4. Install Dependencies (local development only)
+---
 
-Production builds dependencies inside Docker. For local development:
+### Step 2.2: Install Dependencies (optional)
+
+Docker builds dependencies in images. Optional on host:
 
 ```bash
-cd /var/www/app
+cd ~/production/trading-journal
 npm install
 ```
 
 ---
 
-## Docker Setup
-
-Production runs all application services in Docker on a shared `app-network`:
-
-| Service  | Container               | Host port | Internal port |
-| -------- | ----------------------- | --------- | ------------- |
-| MySQL    | `trading-journal-mysql` | 127.0.0.1:3306 | 3306     |
-| Backend  | `trading-journal-backend` | 127.0.0.1:8000 | 8000   |
-| Frontend | `trading-journal-frontend` | 127.0.0.1:8080 | 3000  |
-
-The backend connects to MySQL via the Docker service name `mysql` (`DB_HOST=mysql`). Nginx on the host proxies public traffic to `127.0.0.1:8000` and `127.0.0.1:8080`.
-
-### 1. Create Environment Files
+### Step 2.3: Create Environment Files
 
 ```bash
-cd /var/www/app
-
+cd ~/production/trading-journal
 cp .env.docker.example .env.docker
 cp .env.backend.example .env.backend
-cp .env.compose.example .env
-
-nano .env.docker
-nano .env.backend
-nano .env
 ```
 
-**`.env.docker`** — MySQL container credentials:
+**`~/production/trading-journal/.env.docker`**
 
 ```env
-MYSQL_ROOT_PASSWORD=your_root_password_here
+MYSQL_ROOT_PASSWORD=CHANGE_THIS_STRONG_PASSWORD
 MYSQL_DATABASE=trading_journal
 MYSQL_USER=trading_user
-MYSQL_PASSWORD=your_secure_password_here
+MYSQL_PASSWORD=CHANGE_THIS_STRONG_PASSWORD
 ```
 
-**`.env.backend`** — Backend secrets (`DB_HOST` / `DB_PORT` are set in `docker-compose.yml`):
+**`~/production/trading-journal/.env.backend`**
 
 ```env
 PORT=8000
@@ -187,764 +188,387 @@ NODE_ENV=production
 
 DB_NAME=trading_journal
 DB_USER=trading_user
-DB_PASSWORD=your_secure_password_here
+DB_PASSWORD=CHANGE_THIS_STRONG_PASSWORD
 
-JWT_SECRET=your_jwt_secret_here
-JWT_REFRESH_SECRET=your_jwt_refresh_secret_here
+JWT_SECRET=CHANGE_THIS_LONG_RANDOM_SECRET
+JWT_REFRESH_SECRET=CHANGE_THIS_LONG_RANDOM_SECRET
 
 CORS_ORIGIN=https://yourdomain.com,https://www.yourdomain.com
 FRONTEND_URL_HTTP=http://yourdomain.com
 FRONTEND_URL_HTTPS=https://yourdomain.com
 
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REFRESH_TOKEN=your_google_refresh_token
-GMAIL_OAUTH_USER=your_email@gmail.com
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REFRESH_TOKEN=
+GMAIL_OAUTH_USER=
 ```
 
-Use the same `DB_USER` / `DB_PASSWORD` as in `.env.docker`.
+**`~/production/.env`** (compose project directory — frontend build arg):
 
-**`.env`** — Compose build variable (public API URL baked into the frontend at build time):
+```bash
+nano ~/production/.env
+```
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com/
 ```
 
-Generate JWT secrets:
+Match `DB_USER` / `DB_PASSWORD` in `.env.docker` and `.env.backend`.
+
+---
+
+### Step 2.4: Generate JWT Secrets
 
 ```bash
 openssl rand -base64 32
 openssl rand -base64 32
 ```
 
-### 2. Build and Start All Services
+Add to `.env.backend`.
+
+---
+
+## Part 3: Application Dockerfiles
+
+Included in the repo under `packages/backend/Dockerfile` and `packages/frontend/Dockerfile`.
+
+### Step 3.1: Architecture Overview
+
+| Service | Container | Internal port |
+| ------- | --------- | ------------- |
+| MySQL | `trading-journal-mysql` | 3306 |
+| Backend | `trading-journal-backend` | 8000 |
+| Frontend | `trading-journal-frontend` | 3000 |
+| Nginx | `trading-journal-nginx` | 80 / 443 |
+
+All services use Docker network **`production-network`**. Nginx proxies to backend/frontend by service name.
+
+---
+
+### Step 3.2: Backend Dockerfile
+
+`packages/backend/Dockerfile` — Node 20 Alpine, port **8000**, `node app.js`.
+
+---
+
+### Step 3.3: Frontend Dockerfile
+
+`packages/frontend/Dockerfile` — multi-stage Next.js **standalone**, build arg `NEXT_PUBLIC_API_BASE_URL`, port **3000**.
+
+---
+
+### Step 3.4: Supporting Files
+
+| File | Purpose |
+| ---- | ------- |
+| `production/docker-compose.yml` | Full production stack → copy to `~/production/` |
+| `production/nginx/conf.d/trading-journal.conf` | Nginx site config |
+| `production/backup-db.sh` | MySQL backup script |
+| `.dockerignore` | Docker build context |
+
+---
+
+## Part 4: Docker Compose Setup
+
+### Step 4.1: Install `docker-compose.yml`
+
+Copy the production compose file from the repo:
 
 ```bash
-cd /var/www/app
-docker compose up -d --build
+cp ~/production/trading-journal/production/docker-compose.yml ~/production/docker-compose.yml
+nano ~/production/docker-compose.yml
 ```
 
-### 3. Verify Containers
+Or clone first, then:
 
 ```bash
+# After clone in Step 2.1:
+cp ~/production/trading-journal/production/docker-compose.yml ~/production/docker-compose.yml
+```
+
+The file defines:
+
+- `trading-mysql` — data in `./trading-journal-mysql-data`
+- `trading-journal-backend` — build `./trading-journal`
+- `trading-journal-frontend` — build with `NEXT_PUBLIC_API_BASE_URL` from `~/production/.env`
+- `nginx` — mounts `./nginx/conf.d`, `./certbot/conf`, `./certbot/www`
+
+**Checkpoint:** `~/production/docker-compose.yml` exists and paths match your folders.
+
+---
+
+## Part 5: Nginx Configuration
+
+### Step 5.1: Configure Nginx Reverse Proxy
+
+```bash
+cp ~/production/trading-journal/production/nginx/conf.d/trading-journal.conf \
+   ~/production/nginx/conf.d/trading-journal.conf
+
+nano ~/production/nginx/conf.d/trading-journal.conf
+```
+
+Replace `yourdomain.com` with your domain.
+
+Upstreams (Docker internal DNS):
+
+- `trading-journal-backend:8000`
+- `trading-journal-frontend:3000`
+
+After editing, start nginx with the stack in Part 6, or reload if already running:
+
+```bash
+cd ~/production
+docker compose exec nginx nginx -t
+docker compose exec nginx nginx -s reload
+```
+
+---
+
+## Part 6: Deploy All Services
+
+### Step 6.1: Build and Start All Services
+
+```bash
+cd ~/production
+docker compose build
+docker compose up -d
 docker compose ps
-
-docker compose exec mysql mysql -u trading_user -p trading_journal -e "SELECT 1;"
-
-docker compose logs -f backend
-docker compose logs -f frontend
 ```
 
-### 4. Enable Stack on Boot
+All services should show **running**.
+
+---
+
+### Step 6.2: Verify Database and Apps
 
 ```bash
-sudo nano /etc/systemd/system/trading-journal.service
-```
+docker compose exec trading-mysql mysql -u trading_user -p trading_journal -e "SELECT 1;"
 
-```ini
-[Unit]
-Description=Trading Journal (Docker Compose)
-After=docker.service
-Requires=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/var/www/app
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-User=ubuntu
-Group=docker
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable trading-journal
-sudo systemctl start trading-journal
-```
-
-### 5. Docker Commands (Quick Reference)
-
-```bash
-cd /var/www/app
-
-docker compose up -d --build
-docker compose up -d --build backend
-docker compose up -d --build frontend
-
-docker compose logs -f
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f mysql
-
-docker compose stop
-docker compose restart backend
-
-docker compose exec mysql mysql -u trading_user -p trading_journal
-docker compose exec backend sh
+docker compose logs --tail=30 trading-journal-backend
+docker compose logs --tail=30 trading-journal-frontend
+docker compose logs --tail=20 nginx
 ```
 
 ---
 
-## Configure Backend (local development only)
-
-For production, use `.env.backend` with Docker (see [Docker Setup](#docker-setup)). For local development without Docker:
+### Step 6.3: Verify via Browser / curl
 
 ```bash
-cd packages/backend
-cp .env.example .env
-nano .env
+curl -sI http://api.yourdomain.com | head -1
+curl -sI http://yourdomain.com | head -1
 ```
 
-Set `DB_HOST=127.0.0.1` when MySQL runs locally or via `docker compose up -d mysql`.
+- `http://api.yourdomain.com`
+- `http://yourdomain.com`
 
 ---
 
-## Configure Nginx
+## Part 7: SSL/HTTPS Setup
 
-### 1. Remove Default Config
+Complete **Step 1.6** (DNS) first.
 
-```bash
-sudo rm /etc/nginx/sites-enabled/default
-```
-
-### 2. Create Nginx Configuration
+### Step 7.1: Install Certbot
 
 ```bash
-sudo nano /etc/nginx/sites-available/trading-journal
+sudo apt install certbot -y
 ```
 
-**Add the following configuration:**
+---
+
+### Step 7.2: Obtain Certificates
+
+```bash
+cd ~/production
+docker compose stop nginx
+```
+
+```bash
+sudo certbot certonly --standalone -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
+```
+
+```bash
+sudo cp -r /etc/letsencrypt/* ~/production/certbot/conf/
+```
+
+---
+
+### Step 7.3: Update `trading-journal.conf` for HTTPS
+
+Add HTTPS `server` blocks and HTTP → HTTPS redirects for `api`, `yourdomain.com`, and `www`.
+
+Example (API):
 
 ```nginx
-# API Backend Server
-upstream backend_api {
-    server 127.0.0.1:8000;
-    keepalive 64;
-}
-
-# Frontend Server
-upstream frontend_app {
-    server 127.0.0.1:8080;
-    keepalive 64;
-}
-
-# Redirect HTTP to HTTPS
-server {
-    listen 80;
-    listen [::]:80;
-    server_name yourdomain.com www.yourdomain.com api.yourdomain.com;
-
-    # Let's Encrypt validation
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    # Redirect all other traffic to HTTPS
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-# HTTPS - API Backend
 server {
     listen 443 ssl http2;
-    listen [::]:443 ssl http2;
     server_name api.yourdomain.com;
 
-    # SSL Configuration (will be added by Certbot)
-    # ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
 
-    # SSL Settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
+    client_max_body_size 10M;
 
-    # Security Headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # Logging
-    access_log /var/log/nginx/api-access.log;
-    error_log /var/log/nginx/api-error.log;
-
-    # Proxy to Backend
     location / {
-        proxy_pass http://backend_api;
+        proxy_pass http://trading_backend;
         proxy_http_version 1.1;
-
-        # Headers
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-
-        # Cache
-        proxy_cache_bypass $http_upgrade;
     }
-
-    # File upload size limit
-    client_max_body_size 10M;
 }
 
-# HTTPS - Frontend
 server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name yourdomain.com www.yourdomain.com;
-
-    # SSL Configuration (will be added by Certbot)
-    # ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    # ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-
-    # SSL Settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
-
-    # Security Headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    # Logging
-    access_log /var/log/nginx/frontend-access.log;
-    error_log /var/log/nginx/frontend-error.log;
-
-    # Proxy to Frontend
-    location / {
-        proxy_pass http://frontend_app;
-        proxy_http_version 1.1;
-
-        # Headers
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-
-        # Cache
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Next.js static files
-    location /_next/static {
-        proxy_pass http://frontend_app;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
-
-    # File upload size limit
-    client_max_body_size 10M;
+    listen 80;
+    server_name api.yourdomain.com;
+    return 301 https://$server_name$request_uri;
 }
 ```
 
-### 3. Enable Configuration
+Repeat for frontend hostnames → `trading_frontend`.
+
+---
+
+### Step 7.4: Start Nginx
 
 ```bash
-# Create symlink
-sudo ln -s /etc/nginx/sites-available/trading-journal /etc/nginx/sites-enabled/
-
-# Test configuration
-sudo nginx -t
-
-# Reload Nginx
-sudo systemctl reload nginx
+cd ~/production
+docker compose start nginx
+docker compose exec nginx nginx -t
+docker compose exec nginx nginx -s reload
 ```
 
 ---
 
-## Setup SSL with Let's Encrypt
-
-### 1. Install Certbot
+### Step 7.5: Auto-Renewal
 
 ```bash
-sudo apt install certbot python3-certbot-nginx -y
-```
-
-### 2. Create Certbot Directory
-
-```bash
-sudo mkdir -p /var/www/certbot
-```
-
-### 3. Obtain SSL Certificates
-
-```bash
-# Get certificates for all domains
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
-
-# Follow the prompts:
-# - Enter email address
-# - Agree to terms
-# - Choose to redirect HTTP to HTTPS (recommended)
-```
-
-### 4. Test Auto-Renewal
-
-```bash
-sudo certbot renew --dry-run
-```
-
-### 5. Auto-Renewal is Setup
-
-Certbot automatically creates a cron job or systemd timer for renewal.
-
----
-
-## DNS Configuration (GoDaddy + Route53)
-
-### Step 1: Create Route53 Hosted Zone
-
-1. Go to AWS Route53 Console
-2. Click **"Create Hosted Zone"**
-3. Enter your domain name: `yourdomain.com`
-4. Type: **Public Hosted Zone**
-5. Click **"Create"**
-
-### Step 2: Get Route53 Name Servers
-
-After creating the hosted zone, AWS provides 4 name servers:
-
-```
-ns-1234.awsdns-12.org
-ns-5678.awsdns-34.net
-ns-9012.awsdns-56.com
-ns-3456.awsdns-78.co.uk
-```
-
-### Step 3: Update GoDaddy Name Servers
-
-1. Log in to **GoDaddy**
-2. Go to **My Products** → **Domains**
-3. Click on your domain
-4. Scroll to **Nameservers**
-5. Click **"Change"**
-6. Select **"I'll use my own nameservers"**
-7. Enter all 4 Route53 name servers
-8. Click **"Save"**
-
-**Note:** DNS propagation can take 24-48 hours
-
-### Step 4: Create Route53 DNS Records
-
-Go to your Route53 Hosted Zone and create the following records:
-
-#### A Record - Main Domain
-
-```
-Record name: (leave empty or @)
-Record type: A
-Value: YOUR_EC2_ELASTIC_IP
-TTL: 300
-```
-
-#### A Record - www Subdomain
-
-```
-Record name: www
-Record type: A
-Value: YOUR_EC2_ELASTIC_IP
-TTL: 300
-```
-
-#### A Record - API Subdomain
-
-```
-Record name: api
-Record type: A
-Value: YOUR_EC2_ELASTIC_IP
-TTL: 300
-```
-
-#### Optional: CNAME Record (Alternative for www)
-
-```
-Record name: www
-Record type: CNAME
-Value: yourdomain.com
-TTL: 300
-```
-
-### Step 5: Verify DNS Propagation
-
-```bash
-# Check if DNS is propagated
-nslookup yourdomain.com
-nslookup www.yourdomain.com
-nslookup api.yourdomain.com
-
-# Or use online tools
-# https://www.whatsmydns.net/
-```
-
----
-
-## Deployment Commands
-
-### Initial Deployment
-
-```bash
-# 1. Connect to server
-ssh -i your-key.pem ubuntu@your-ec2-ip
-
-# 2. Navigate to app directory
-cd /var/www/app
-
-# 3. Pull latest changes
-git pull origin main
-
-# 4. Build and start all containers
-docker compose up -d --build
-
-# 5. Check status
-docker compose ps
-docker compose logs --tail=20 backend
-docker compose logs --tail=20 frontend
-```
-
-### Update Deployment
-
-```bash
-cd /var/www/app
-git pull origin main
-docker compose up -d --build
-docker compose ps
-```
-
-### Create Deployment Script
-
-```bash
-nano /var/www/app/deploy.sh
-```
-
-**Add:**
-
-```bash
-#!/bin/bash
-set -e
-
-echo "🚀 Starting deployment..."
-
-cd /var/www/app
-
-echo "📦 Pulling latest changes..."
-git pull origin main
-
-echo "🔨 Building and restarting containers..."
-docker compose up -d --build
-
-echo "✅ Deployment complete!"
-
-docker compose ps
-```
-
-**Make executable:**
-
-```bash
-chmod +x /var/www/app/deploy.sh
-```
-
-**Run deployment:**
-
-```bash
-/var/www/app/deploy.sh
-```
-
----
-
-## Troubleshooting
-
-### Container Not Starting
-
-```bash
-cd /var/www/app
-
-docker compose ps
-docker compose logs --tail=50 backend
-docker compose logs --tail=50 frontend
-
-# Check if ports are in use
-sudo ss -tulpn | grep 8000
-sudo ss -tulpn | grep 8080
-
-# Rebuild a specific service
-docker compose up -d --build backend
-docker compose up -d --build frontend
-```
-
-### Database Connection Issues
-
-```bash
-cd /var/www/app
-
-# Check MySQL container status
-docker compose ps mysql
-docker compose logs --tail=50 mysql
-
-# Test connection via Docker
-docker compose exec mysql mysql -u trading_user -p trading_journal -e "SELECT 1;"
-
-# Test connection from host (requires mysql-client: sudo apt install mysql-client)
-mysql -h 127.0.0.1 -P 3306 -u trading_user -p trading_journal
-
-# Restart MySQL container
-docker compose restart mysql
-
-# If container won't start, inspect logs
-docker compose logs -f mysql
-```
-
-### Nginx Issues
-
-```bash
-# Test nginx configuration
-sudo nginx -t
-
-# View nginx error logs
-sudo tail -f /var/log/nginx/error.log
-sudo tail -f /var/log/nginx/api-error.log
-sudo tail -f /var/log/nginx/frontend-error.log
-
-# Restart nginx
-sudo systemctl restart nginx
-```
-
-### SSL Certificate Issues
-
-```bash
-# Check certificate status
-sudo certbot certificates
-
-# Renew certificates manually
-sudo certbot renew
-
-# View certbot logs
-sudo tail -f /var/log/letsencrypt/letsencrypt.log
-```
-
-### DNS Not Resolving
-
-```bash
-# Check DNS resolution
-nslookup yourdomain.com
-dig yourdomain.com
-
-# Check if name servers are correct
-dig NS yourdomain.com
-```
-
-### Application Errors
-
-```bash
-cd /var/www/app
-
-docker compose logs -f backend
-docker compose logs -f frontend
-
-# Nginx access logs
-sudo tail -f /var/log/nginx/api-access.log
-sudo tail -f /var/log/nginx/frontend-access.log
-
-# Check disk space
-df -h
-
-# Check memory usage
-free -h
-```
-
----
-
-## Security Checklist
-
-- [ ] EC2 security group configured with minimal required ports (3306 not exposed publicly)
-- [ ] SSH key-based authentication (no password login)
-- [ ] Firewall configured (ufw)
-- [ ] SSL certificates installed and auto-renewing
-- [ ] Environment variables properly set (not committed to git)
-- [ ] `.env.docker`, `.env.backend`, and root `.env` use strong secrets and are not in git
-- [ ] MySQL Docker port bound to `127.0.0.1` only
-- [ ] JWT secrets are randomly generated
-- [ ] Regular backups configured
-- [ ] Monitoring and alerts setup (CloudWatch)
-- [ ] Log rotation configured
-
----
-
-## Firewall Setup (UFW)
-
-```bash
-# Install UFW
-sudo apt install ufw -y
-
-# Default policies
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-
-# Allow SSH
-sudo ufw allow 22/tcp
-
-# Allow HTTP and HTTPS
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Enable firewall
-sudo ufw enable
-
-# Check status
-sudo ufw status
-```
-
----
-
-## Monitoring
-
-### Setup CloudWatch Agent (Optional)
-
-```bash
-# Download CloudWatch agent
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-
-# Install
-sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
-
-# Configure with wizard
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
-```
-
----
-
-## Backup Strategy
-
-### Database Backup
-
-Backups run `mysqldump` inside the MySQL container so no host MySQL client is required.
-
-```bash
-# Create backup script
-nano /var/www/app/backup-db.sh
-```
-
-```bash
-#!/bin/bash
-set -e
-
-cd /var/www/app
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_DIR="/var/backups/mysql"
-mkdir -p $BACKUP_DIR
-
-# Load credentials from .env.docker
-set -a
-source .env.docker
-set +a
-
-docker compose exec -T mysql mysqldump \
-  -u "$MYSQL_USER" \
-  -p"$MYSQL_PASSWORD" \
-  "$MYSQL_DATABASE" > "$BACKUP_DIR/backup_$TIMESTAMP.sql"
-
-# Keep only last 7 days
-find $BACKUP_DIR -name "backup_*.sql" -mtime +7 -delete
-
-echo "Backup saved to $BACKUP_DIR/backup_$TIMESTAMP.sql"
-```
-
-### Restore from Backup
-
-```bash
-cd /var/www/app
-set -a && source .env.docker && set +a
-
-docker compose exec -T mysql mysql \
-  -u "$MYSQL_USER" \
-  -p"$MYSQL_PASSWORD" \
-  "$MYSQL_DATABASE" < /var/backups/mysql/backup_YYYYMMDD_HHMMSS.sql
-```
-
-```bash
-# Make executable
-chmod +x /var/www/app/backup-db.sh
-
-# Add to crontab (daily at 2 AM)
+cp ~/production/trading-journal/production/renew-certs-trading-journal.sh ~/production/renew-certs.sh
+chmod +x ~/production/renew-certs.sh
 crontab -e
 ```
 
-Add:
-
 ```
-0 2 * * * /var/www/app/backup-db.sh
+0 0 1 * * /home/yourusername/production/renew-certs.sh >> /home/yourusername/production/certbot-renewal.log 2>&1
 ```
 
 ---
 
-## Quick Reference
+## Part 8: Maintenance & Operations
 
-### Docker Commands
+### Update application
 
 ```bash
-cd /var/www/app
+cd ~/production/trading-journal
+git pull origin main
+cd ~/production
+docker compose up -d --build trading-journal-backend trading-journal-frontend
+```
 
+If `NEXT_PUBLIC_API_BASE_URL` changed, update `~/production/.env` then:
+
+```bash
+docker compose up -d --build trading-journal-frontend
+```
+
+### Database backup
+
+```bash
+cp ~/production/trading-journal/production/backup-db.sh ~/production/backup-trading-journal-db.sh
+chmod +x ~/production/backup-trading-journal-db.sh
+crontab -e
+# 0 2 * * * /home/yourusername/production/backup-trading-journal-db.sh
+```
+
+### Common commands
+
+```bash
+cd ~/production
 docker compose ps
-docker compose up -d --build
-docker compose stop
-docker compose restart backend
-
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f mysql
-
-docker compose exec mysql mysql -u trading_user -p trading_journal
-docker compose exec backend sh
+docker compose logs -f trading-journal-backend
+docker compose restart trading-journal-backend
+docker compose exec nginx nginx -s reload
 ```
 
-### Nginx Commands
+### Troubleshooting
 
 ```bash
-# Test configuration
-sudo nginx -t
-
-# Reload configuration
-sudo systemctl reload nginx
-
-# Restart nginx
-sudo systemctl restart nginx
-
-# View logs
-sudo tail -f /var/log/nginx/error.log
+docker compose logs trading-journal-backend
+docker compose logs trading-mysql
+docker compose exec nginx nginx -t
 ```
+
+### Security checklist
+
+- [ ] UFW: 22, 80, 443 only
+- [ ] MySQL has no public `ports:` mapping
+- [ ] Strong JWT and DB passwords
+- [ ] Env files not in git
+- [ ] SSL on all hostnames
+- [ ] Daily backups scheduled
+
+---
+
+## Part 9: Another Site Already on This Server (Optional)
+
+Use this only if **`~/production` already runs a different project** (another `docker-compose.yml`, other `conf.d/*.conf` files). Trading Journal should be added **without** breaking the existing site.
+
+### Safe vs dangerous
+
+| Safe | Dangerous |
+| ---- | --------- |
+| New `trading-journal.conf` in `nginx/conf.d/` | Editing the other site's `.conf` |
+| Add new services to compose | `docker compose down` (stops everything) |
+| `docker compose up -d trading-journal-backend` | `docker builder prune -af` on shared server |
+| `nginx -s reload` after `nginx -t` | Reusing another app's database volume |
+
+### Steps (summary)
+
+1. Backup: `cp ~/production/docker-compose.yml ~/production/docker-compose.yml.bak.$(date +%Y%m%d)`
+2. Clone this repo to `~/production/trading-journal` (Part 2)
+3. **Merge** services from `production/docker-compose.yml` into your existing compose — keep the other app's services unchanged; add `trading-mysql`, `trading-journal-backend`, `trading-journal-frontend`; ensure all services share one Docker network or are reachable from nginx
+4. Add `trading-journal.conf` only (Part 5)
+5. `docker compose up -d trading-mysql trading-journal-backend trading-journal-frontend`
+6. `docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`
+7. DNS + SSL for **this** domain (Step 1.6 + Part 7)
+8. Verify **both** sites still respond
+
+### Rollback (this app only)
+
+```bash
+cd ~/production
+docker compose stop trading-journal-frontend trading-journal-backend trading-mysql
+docker compose rm -f trading-journal-frontend trading-journal-backend trading-mysql
+rm ~/production/nginx/conf.d/trading-journal.conf
+docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload
+```
+
+---
+
+## Local Development (optional)
+
+Repo root `docker-compose.yml` is for **local dev** only (`app-network`, localhost ports).
+
+```bash
+cp .env.docker.example .env.docker
+cp .env.backend.example .env.backend
+cp .env.compose.example .env
+docker compose up -d --build
+```
+
+Production uses `~/production/` as described above.
 
 ---
 
 ## Support
 
-For issues or questions, refer to:
-
-- [README.md](README.md) - Project documentation
-- Container logs via `docker compose logs`
-- Nginx logs in `/var/log/nginx/`
+- [README.md](README.md)
+- `docker compose logs` in `~/production`
 
 ---
 
-## Scaling Considerations
+## Appendix: Scaling Considerations
 
 ### Application Scalability Assessment
 
@@ -1508,6 +1132,16 @@ aws cloudwatch put-metric-alarm \
   --comparison-operator GreaterThanThreshold \
   --alarm-actions arn:aws:sns:us-east-1:xxxxx:alerts
 ```
+
+---
+
+**Last Updated:** 2026-06-02
+
+
+---
+
+**Last Updated:** 2026-06-02
+
 
 ---
 

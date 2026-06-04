@@ -1,0 +1,91 @@
+# Production compose for Trading Journal
+# Deploy to: ~/production/docker-compose.yml
+#
+# Layout:
+#   ~/production/docker-compose.yml
+#   ~/production/trading-journal/     (git clone)
+#   ~/production/nginx/conf.d/trading-journal.conf
+#   ~/production/certbot/conf/
+#   ~/production/certbot/www/
+#   ~/production/trading-journal-mysql-data/
+
+services:
+  trading-mysql:
+    image: mysql:8.0
+    container_name: trading-journal-mysql
+    restart: unless-stopped
+    env_file:
+      - ./trading-journal/.env.docker
+    volumes:
+      - ./trading-journal-mysql-data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - production-network
+
+  trading-journal-backend:
+    build:
+      context: ./trading-journal
+      dockerfile: packages/backend/Dockerfile
+    container_name: trading-journal-backend
+    restart: unless-stopped
+    env_file:
+      - ./trading-journal/.env.backend
+    environment:
+      DB_HOST: trading-mysql
+      DB_PORT: 3306
+      NODE_ENV: production
+    volumes:
+      - ./trading-journal/packages/backend/uploads:/app/packages/backend/uploads
+    depends_on:
+      trading-mysql:
+        condition: service_healthy
+    networks:
+      - production-network
+
+  trading-journal-frontend:
+    build:
+      context: ./trading-journal
+      dockerfile: packages/frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+    container_name: trading-journal-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - trading-journal-backend
+    networks:
+      - production-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: trading-journal-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - trading-journal-backend
+      - trading-journal-frontend
+    networks:
+      - production-network
+
+networks:
+  production-network:
+    driver: bridge
+
+volumes:
+  trading-journal-mysql-data:

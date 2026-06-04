@@ -1,3 +1,6 @@
+# Local development only. Production uses ~/production/docker-compose.yml
+# See DEPLOYMENT.md and production/docker-compose.yml (server deploy)
+
 services:
   mysql:
     image: mysql:8.0
