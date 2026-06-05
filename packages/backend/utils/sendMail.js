@@ -1,12 +1,12 @@
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
 require("dotenv").config();
-const { User } = require("../models");
 
 const isDev = process.env.NODE_ENV === "development";
+const emailDisabled = process.env.DISABLE_EMAIL === "true";
 
 let transporter;
-if (!isDev) {
+if (!isDev && !emailDisabled) {
   // Create OAuth2 client
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -50,18 +50,19 @@ if (!isDev) {
   });
 }
 
-async function sendMail({ to, subject, text, html, autoVerifyUser = false }) {
+async function sendMail({ to, subject, text, html }) {
   if (isDev) {
     console.log(
       `[DEV MODE] Email not sent. Would send to: ${to}, subject: ${subject}`
     );
-    // Auto-verify user in development mode
-    if (autoVerifyUser) {
-      // Uncomment and adjust this for your actual User model
-      await User.updateOne({ email: to }, { $set: { verified: true } });
-      console.log(`[DEV MODE] Auto-verified user: ${to}`);
-    }
     return { messageId: null, dev: true };
+  }
+
+  if (emailDisabled) {
+    console.log(
+      `[EMAIL DISABLED] Email suppressed. Would send to: ${to}, subject: ${subject}`
+    );
+    return { messageId: null, disabled: true };
   }
 
   const from = `Trade2Learn Support <${process.env.GMAIL_OAUTH_USER}>`;

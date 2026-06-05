@@ -10,6 +10,8 @@ const sendMail = require("../utils/sendMail");
 const crypto = require("crypto");
 require("dotenv").config();
 
+const emailDisabled = process.env.DISABLE_EMAIL === "true";
+
 const createRefreshToken = async (user) => {
   await RefreshToken.destroy({ where: { userId: user.id } });
 
@@ -69,6 +71,12 @@ exports.register = async (req, res) => {
 
     if (existingUser) {
       if (!existingUser.isVerified) {
+        if (emailDisabled) {
+          existingUser.isVerified = true;
+          existingUser.verificationToken = null;
+          await existingUser.save();
+          return res.status(409).json({ message: "Email already exists." });
+        }
         await sendVerificationEmail(existingUser);
         return res.status(409).json({
           message:
@@ -81,7 +89,6 @@ exports.register = async (req, res) => {
 
     // Proceed with registration
     const hashedPassword = await bcrypt.hash(password, 10);
-    const verificationToken = crypto.randomBytes(32).toString("hex");
 
     const userData = {
       email,
@@ -90,18 +97,21 @@ exports.register = async (req, res) => {
       lastname,
       middlename,
       role: "free",
-      isVerified: false,
-      verificationToken,
+      isVerified: emailDisabled,
+      verificationToken: emailDisabled ? null : crypto.randomBytes(32).toString("hex"),
     };
     if (phone) userData.phone = phone; // Only add phone if provided
 
     const user = await User.create(userData);
 
-    await sendVerificationEmail(user);
+    if (!emailDisabled) {
+      await sendVerificationEmail(user);
+    }
 
     return res.status(201).json({
-      message:
-        "Registered successfully. Please check your email to verify your account.",
+      message: emailDisabled
+        ? "Registered successfully. You can now log in."
+        : "Registered successfully. Please check your email to verify your account.",
     });
   } catch (err) {
     console.error("Register error:", err);
@@ -134,7 +144,7 @@ exports.login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (!user.isVerified) {
+    if (!user.isVerified && !emailDisabled) {
       await sendVerificationEmail(user);
       return res.status(403).json({
         message:
@@ -246,6 +256,14 @@ exports.forgotPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
     user.password = hashedPassword;
     await user.save();
+
+    if (emailDisabled) {
+      console.log(`[EMAIL DISABLED] Password reset for ${user.email}: ${tempPassword}`);
+      return res.json({
+        message: "Password has been reset.",
+        tempPassword,
+      });
+    }
 
     try {
       await sendMail({
