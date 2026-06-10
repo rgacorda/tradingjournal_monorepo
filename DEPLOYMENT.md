@@ -17,7 +17,7 @@ Deploy the **Trading Journal** monorepo to Ubuntu using a **`~/production`** lay
 **Stack:**
 
 - **Backend API** (Express) — port `8000` (internal)
-- **Frontend** (Next.js) — port `3000` (internal)
+- **Frontend** (Next.js) — port `3004` (internal)
 - **MySQL 8** — internal only
 - **Nginx** — ports `80` / `443` (public)
 
@@ -35,7 +35,7 @@ Repo templates: `production/docker-compose.yml`, `production/nginx/conf.d/tradin
 Follow these parts in order:
 
 1. **Part 1:** Server Preparation (Steps 1.1 - 1.6)
-2. **Part 2:** Application Setup (Steps 2.1 - 2.4)
+2. **Part 2:** Application Setup (Steps 2.1 - 2.3)
 3. **Part 3:** Application Dockerfiles (Steps 3.1 - 3.4)
 4. **Part 4:** Docker Compose Setup (Step 4.1)
 5. **Part 5:** Nginx Configuration (Step 5.1)
@@ -152,18 +152,7 @@ git clone git@github.com:yourusername/trading-journal-monorepo.git .
 
 ---
 
-### Step 2.2: Install Dependencies (optional)
-
-Docker builds dependencies in images. Optional on host:
-
-```bash
-cd ~/production/trading-journal
-npm install
-```
-
----
-
-### Step 2.3: Create Environment Files
+### Step 2.2: Create Environment Files
 
 ```bash
 cd ~/production/trading-journal
@@ -217,7 +206,7 @@ Match `DB_USER` / `DB_PASSWORD` in `.env.docker` and `.env.backend`.
 
 ---
 
-### Step 2.4: Generate JWT Secrets
+### Step 2.3: Generate JWT Secrets
 
 ```bash
 openssl rand -base64 32
@@ -238,7 +227,7 @@ Included in the repo under `packages/backend/Dockerfile` and `packages/frontend/
 | ------- | --------- | ------------- |
 | MySQL | `trading-journal-mysql` | 3306 |
 | Backend | `trading-journal-backend` | 8000 |
-| Frontend | `trading-journal-frontend` | 3000 |
+| Frontend | `trading-journal-frontend` | 3004 |
 | Nginx | `trading-journal-nginx` | 80 / 443 |
 
 All services use Docker network **`production-network`**. Nginx proxies to backend/frontend by service name.
@@ -253,7 +242,7 @@ All services use Docker network **`production-network`**. Nginx proxies to backe
 
 ### Step 3.3: Frontend Dockerfile
 
-`packages/frontend/Dockerfile` — multi-stage Next.js **standalone**, build arg `NEXT_PUBLIC_API_BASE_URL`, port **3000**.
+`packages/frontend/Dockerfile` — multi-stage Next.js **standalone**, build arg `NEXT_PUBLIC_API_BASE_URL`, port **3004**.
 
 ---
 
@@ -313,7 +302,7 @@ Replace `yourdomain.com` with your domain.
 Upstreams (Docker internal DNS):
 
 - `trading-journal-backend:8000`
-- `trading-journal-frontend:3000`
+- `trading-journal-frontend:3004`
 
 After editing, start nginx with the stack in Part 6, or reload if already running:
 

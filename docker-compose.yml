@@ -62,7 +62,7 @@ services:
     networks:
       - app-network
     ports:
-      - "127.0.0.1:8080:3000"
+      - "127.0.0.1:8080:3004"
 
 networks:
   app-network:
