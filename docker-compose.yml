@@ -55,6 +55,8 @@ services:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     container_name: trading-journal-frontend
     restart: unless-stopped
+    env_file:
+      - .env.compose
     environment:
       NODE_ENV: production
     depends_on:

@@ -66,6 +66,7 @@ pnpm-debug.log*
 !**/.env.example
 .env.docker
 .env.backend
+.env.compose
 
 # IDEs and Editors
 .vscode/

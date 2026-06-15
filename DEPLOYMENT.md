@@ -158,6 +158,7 @@ git clone git@github.com:yourusername/trading-journal-monorepo.git .
 cd ~/production/trading-journal
 cp .env.docker.example .env.docker
 cp .env.backend.example .env.backend
+cp .env.compose.example .env.compose
 ```
 
 **`~/production/trading-journal/.env.docker`**
@@ -192,11 +193,7 @@ GOOGLE_REFRESH_TOKEN=
 GMAIL_OAUTH_USER=
 ```
 
-**`~/production/.env`** (compose project directory — frontend build arg):
-
-```bash
-nano ~/production/.env
-```
+**`~/production/trading-journal/.env.compose`** (frontend build arg — baked into the image at build time):
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com/
@@ -253,6 +250,7 @@ All services use Docker network **`production-network`**. Nginx proxies to backe
 | `production/docker-compose.yml` | Full production stack → copy to `~/production/` |
 | `production/nginx/conf.d/trading-journal.conf` | Nginx site config |
 | `production/backup-db.sh` | MySQL backup script |
+| `.env.compose.example` | Frontend build arg → copy to `trading-journal/.env.compose` |
 | `.dockerignore` | Docker build context |
 
 ---
@@ -279,7 +277,7 @@ The file defines:
 
 - `trading-mysql` — data in `./trading-journal-mysql-data`
 - `trading-journal-backend` — build `./trading-journal`
-- `trading-journal-frontend` — build with `NEXT_PUBLIC_API_BASE_URL` from `~/production/.env`
+- `trading-journal-frontend` — build with `NEXT_PUBLIC_API_BASE_URL` from `./trading-journal/.env.compose`
 - `nginx` — mounts `./nginx/conf.d`, `./certbot/conf`, `./certbot/www`
 
 **Checkpoint:** `~/production/docker-compose.yml` exists and paths match your folders.
@@ -320,7 +318,7 @@ docker compose exec nginx nginx -s reload
 
 ```bash
 cd ~/production
-docker compose build
+docker compose --env-file ./trading-journal/.env.compose build trading-journal-frontend
 docker compose up -d
 docker compose ps
 ```
@@ -452,13 +450,15 @@ crontab -e
 cd ~/production/trading-journal
 git pull origin main
 cd ~/production
-docker compose up -d --build trading-journal-backend trading-journal-frontend
+docker compose up -d --build trading-journal-backend
+docker compose --env-file ./trading-journal/.env.compose up -d --build trading-journal-frontend
 ```
 
-If `NEXT_PUBLIC_API_BASE_URL` changed, update `~/production/.env` then:
+If `NEXT_PUBLIC_API_BASE_URL` changed, update `~/production/trading-journal/.env.compose` then:
 
 ```bash
-docker compose up -d --build trading-journal-frontend
+cd ~/production
+docker compose --env-file ./trading-journal/.env.compose up -d --build trading-journal-frontend
 ```
 
 ### Database backup
@@ -515,13 +515,14 @@ Use this only if **`~/production` already runs a different project** (another `d
 ### Steps (summary)
 
 1. Backup: `cp ~/production/docker-compose.yml ~/production/docker-compose.yml.bak.$(date +%Y%m%d)`
-2. Clone this repo to `~/production/trading-journal` (Part 2)
-3. **Merge** services from `production/docker-compose.yml` into your existing compose — keep the other app's services unchanged; add `trading-mysql`, `trading-journal-backend`, `trading-journal-frontend`; ensure all services share one Docker network or are reachable from nginx
+2. Clone this repo to `~/production/trading-journal` (Part 2) — include `.env.compose` with other env files
+3. **Merge** services from `production/docker-compose.yml` into your existing compose — keep the other app's services unchanged; add `trading-mysql`, `trading-journal-backend`, `trading-journal-frontend` (with `env_file: ./trading-journal/.env.compose` on the frontend); ensure all services share one Docker network or are reachable from nginx
 4. Add `trading-journal.conf` only (Part 5)
-5. `docker compose up -d trading-mysql trading-journal-backend trading-journal-frontend`
-6. `docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`
-7. DNS + SSL for **this** domain (Step 1.6 + Part 7)
-8. Verify **both** sites still respond
+5. `docker compose up -d trading-mysql trading-journal-backend`
+6. `docker compose --env-file ./trading-journal/.env.compose up -d --build trading-journal-frontend`
+7. `docker compose exec nginx nginx -t && docker compose exec nginx nginx -s reload`
+8. DNS + SSL for **this** domain (Step 1.6 + Part 7)
+9. Verify **both** sites still respond
 
 ### Rollback (this app only)
 
@@ -542,8 +543,8 @@ Repo root `docker-compose.yml` is for **local dev** only (`app-network`, localho
 ```bash
 cp .env.docker.example .env.docker
 cp .env.backend.example .env.backend
-cp .env.compose.example .env
-docker compose up -d --build
+cp .env.compose.example .env.compose
+docker compose --env-file .env.compose up -d --build
 ```
 
 Production uses `~/production/` as described above.
