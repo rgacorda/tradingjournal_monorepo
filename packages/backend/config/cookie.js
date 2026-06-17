@@ -1,10 +1,11 @@
 const isProduction = process.env.NODE_ENV === 'production';
+const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
 
 const commonOptions = {
   httpOnly: true,
   secure: isProduction,
   sameSite: isProduction ? "None" : "Lax",
-  domain: isProduction ? ".trade2learn.site" : undefined,
+  domain: isProduction ? cookieDomain : undefined,
   path: '/',
 };
 

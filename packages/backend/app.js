@@ -14,10 +14,10 @@ const app = express();
 
 // MIDDLEWARE
 const allowedOrigins = [
-  process.env.CORS_ORIGIN,
-  process.env.FRONTEND_URL_HTTP,
+  ...(process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()) ?? []),
+  process.env.FONTEND_URL_HTTP,
   process.env.FRONTEND_URL_HTTPS,
-];
+].filter(Boolean);
 
 app.use(
   cors({
