@@ -1,0 +1,37 @@
+# Shared nginx — production
+# Deploy to: ~/production/shared/docker-compose.yml
+# Run from:  ~/production/shared/
+#
+#   cd ~/production/shared
+#   docker compose up -d
+#
+# Prerequisites (run once on the server):
+#   docker network create production-network
+#
+# All app compose files (pos-system, trading-journal, etc.) must also use:
+#   networks:
+#     production-network:
+#       external: true
+#
+# nginx configs:  ~/production/nginx/conf.d/*.conf
+# SSL certs:      ~/production/certbot/conf/  (managed by certbot)
+# ACME webroot:   ~/production/certbot/www/
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: production-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx/conf.d:/etc/nginx/conf.d:ro
+      - ../certbot/conf:/etc/letsencrypt:ro
+      - ../certbot/www:/var/www/certbot:ro
+    networks:
+      - production-network
+
+networks:
+  production-network:
+    external: true
