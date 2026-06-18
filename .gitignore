@@ -4,7 +4,7 @@ node_modules/
 **/node_modules/
 .pnp
 .pnp.js
-package-lock.json
+# package-lock.json is committed so Docker builds (npm ci) work on the server
 */package-lock.json
 
 # Turbo
