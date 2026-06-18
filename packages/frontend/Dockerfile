@@ -2,11 +2,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package.json turbo.json ./
+COPY package.json package-lock.json turbo.json ./
 COPY packages/backend/package.json ./packages/backend/
 COPY packages/frontend/package.json ./packages/frontend/
 
-RUN npm install --workspace=frontend
+RUN npm ci --workspace=frontend
 
 COPY packages/frontend ./packages/frontend
 
@@ -28,7 +28,7 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/packages/frontend/public ./packages/frontend/public
+COPY --from=builder --chown=nextjs:nodejs /app/packages/frontend/public ./packages/frontend/public
 COPY --from=builder --chown=nextjs:nodejs /app/packages/frontend/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/packages/frontend/.next/static ./packages/frontend/.next/static
 

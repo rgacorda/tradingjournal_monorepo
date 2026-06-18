@@ -2,11 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package.json turbo.json ./
+COPY package.json package-lock.json turbo.json ./
 COPY packages/backend/package.json ./packages/backend/
 COPY packages/frontend/package.json ./packages/frontend/
 
-RUN npm install --workspace=backend --omit=dev
+RUN npm ci --workspace=backend --omit=dev
 
 COPY packages/backend ./packages/backend
 
